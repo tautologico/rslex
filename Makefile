@@ -10,5 +10,5 @@ clean:
 	rm -f *.o
 	rm -f rslex
 	rm -R -f rslex.dSYM/
-	rm -R rslex_tests
+	rm -f rslex_tests
 	rm -R -f rslex_tests.dSYM/
