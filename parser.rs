@@ -154,19 +154,58 @@ fn test_skip_ws() {
 // token types 
 enum Token { LBrace, RBrace, Equals, Comma, Semicolon, 
              LParen, RParen, Star, Plus, Bar, 
-             Defs, Rules, Code, Id(~str), RegExp }
+             DefsId, RulesId, CodeId, Id(~str), RegExp, Eof }
+
+enum Block { Rules, Defs, Code }
 
 // fn match_next_token() -> bool {
 // }
 
-// fn get_next_token(reader: @Reader) -> ~Token {
-// }
+fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
+    let mut c = buffer.next_char();
+    let mut done = false;
+    let mut res = ~Eof;
+    while !done {
+        skip_whitespace(buffer);
+        if is_eof(c) {
+            done = true;
+        }
+        else {
+            match c {
+                '{' => { res = ~LBrace; done = true; },
+                _   => { done = true; }   // FIX
+            }
+        }
+    }
+    res
+}
+
+fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
+    let mut res : ~str = ~"";
+    let mut c = buffer.next_char();
+    res.push_char(first);
+    while !is_eof(c) && !std::char::is_whitespace(c) {
+        res.push_char(c);
+        c = buffer.next_char();
+    }
+    buffer.return_char(c);
+    res    
+}
+
+#[test]
+fn test_parse_id() {
+    let mut buffer = std::io::with_str_reader("hombas   ", LookaheadBuffer::new);
+    assert!(std::str::eq(&parse_id(&mut buffer, 's'), &~"shombas"));
+}
+
+fn parse_toplevel_block(buffer: &mut LookaheadBuffer) {
+}
 
 // fn parse_regexp() {
 // }
 
 pub fn parse_lexer_spec(reader: @Reader) {
-    let c : char = reader.read_char();
-    println("Parsing")
+    let mut buffer = LookaheadBuffer::new(reader);
+    parse_toplevel_block(&mut buffer);
 }
 
