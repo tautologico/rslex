@@ -196,6 +196,9 @@ fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
 fn test_parse_id() {
     let mut buffer = std::io::with_str_reader("hombas   ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_id(&mut buffer, 's'), &~"shombas"));
+
+    let mut buffer2 = std::io::with_str_reader(" or die ", LookaheadBuffer::new);
+    assert!(std::str::eq(&parse_id(&mut buffer2, 'b'), &~"b"));
 }
 
 fn parse_toplevel_block(buffer: &mut LookaheadBuffer) {
