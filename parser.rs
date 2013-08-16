@@ -180,7 +180,7 @@ fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
     res
 }
 
-fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
+fn read_string(buffer: &mut LookaheadBuffer, first: char) -> ~str {
     let mut res : ~str = ~"";
     let mut c = buffer.next_char();
     res.push_char(first);
@@ -193,12 +193,12 @@ fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
 }
 
 #[test]
-fn test_parse_id() {
+fn test_read_string() {
     let mut buffer = std::io::with_str_reader("hombas   ", LookaheadBuffer::new);
-    assert!(std::str::eq(&parse_id(&mut buffer, 's'), &~"shombas"));
+    assert!(std::str::eq(&read_string(&mut buffer, 's'), &~"shombas"));
 
     let mut buffer2 = std::io::with_str_reader(" or die ", LookaheadBuffer::new);
-    assert!(std::str::eq(&parse_id(&mut buffer2, 'b'), &~"b"));
+    assert!(std::str::eq(&read_string(&mut buffer2, 'b'), &~"b"));
 }
 
 fn parse_toplevel_block(buffer: &mut LookaheadBuffer) {
