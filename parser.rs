@@ -9,6 +9,8 @@
 
 extern mod std;
 
+mod regexp; 
+
 // --- utility functions -------------------------------------------
 
 #[inline]
@@ -130,7 +132,7 @@ mod buffer_tests {
 }
 
 
-fn skip_whitespace(buffer: &mut LookaheadBuffer) {
+pub fn skip_whitespace(buffer: &mut LookaheadBuffer) {
     let mut c = buffer.next_char();
     while (!is_eof(c) && std::char::is_whitespace(c)) {
         c = buffer.next_char();
@@ -151,9 +153,12 @@ fn test_skip_ws() {
     assert!(is_eof(buffer.next_char()));
 }
 
+
+// --- lexer spec parsing ------------------------------------------
+
 // token types 
 enum Token { LBrace, RBrace, Equals, Comma, Semicolon, 
-             LParen, RParen, Star, Plus, Bar, 
+             LParenth, RParenth, 
              DefsId, RulesId, CodeId, Id(~str), RegExp, Eof }
 
 enum Block { Rules, Defs, Code }
@@ -251,9 +256,6 @@ fn test_parse_toplevel() {
     let mut b3 = std::io::with_str_reader("defs { ausmaus }   ", LookaheadBuffer::new);
     parse_toplevel_block(&mut b3);
 }
-
-// fn parse_regexp() {
-// }
 
 pub fn parse_lexer_spec(reader: @Reader) {
     let mut buffer = LookaheadBuffer::new(reader);
