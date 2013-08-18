@@ -180,7 +180,18 @@ fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
     res
 }
 
-fn read_string(buffer: &mut LookaheadBuffer, first: char) -> ~str {
+fn read_string(buffer: &mut LookaheadBuffer) -> ~str {
+    let mut res : ~str = ~"";
+    let mut c = buffer.next_char();
+    while !is_eof(c) && !std::char::is_whitespace(c) {
+        res.push_char(c);
+        c = buffer.next_char();
+    }
+    buffer.return_char(c);
+    res    
+}
+
+fn read_string_after_first(buffer: &mut LookaheadBuffer, first: char) -> ~str {
     let mut res : ~str = ~"";
     let mut c = buffer.next_char();
     res.push_char(first);
@@ -194,14 +205,51 @@ fn read_string(buffer: &mut LookaheadBuffer, first: char) -> ~str {
 
 #[test]
 fn test_read_string() {
+    let mut b1 = std::io::with_str_reader("aussonderungsaxiom   ", LookaheadBuffer::new);
+    assert!(std::str::eq(&read_string(&mut b1), &~"aussonderungsaxiom"));
+
+    let mut b2 = std::io::with_str_reader("", LookaheadBuffer::new);
+    assert!(std::str::eq(&read_string(&mut b2), &~""));
+
     let mut buffer = std::io::with_str_reader("hombas   ", LookaheadBuffer::new);
-    assert!(std::str::eq(&read_string(&mut buffer, 's'), &~"shombas"));
+    assert!(std::str::eq(&read_string_after_first(&mut buffer, 's'), &~"shombas"));
 
     let mut buffer2 = std::io::with_str_reader(" or die ", LookaheadBuffer::new);
-    assert!(std::str::eq(&read_string(&mut buffer2, 'b'), &~"b"));
+    assert!(std::str::eq(&read_string_after_first(&mut buffer2, 'b'), &~"b"));
 }
 
 fn parse_toplevel_block(buffer: &mut LookaheadBuffer) {
+    skip_whitespace(buffer);
+    // TODO: check for EOF
+    match read_string(buffer) {
+        ~"rules" => println("Rules"),
+        ~"defs" => println("defs"),
+        ~"code" => println("code"),
+        _ => println("Quo vadis?") // TODO: error
+    }
+}
+
+fn match_next_string(buffer: &mut LookaheadBuffer, s: &~str) -> bool {
+    std::str::eq(&read_string(buffer), s)
+}
+
+// fn parse_defs(buffer: &mut LookaheadBuffer) {
+//     println("Wut?")
+// }
+
+// fn parse_def(buffer: &mut LookaheadBuffer) {
+// }
+
+#[test]
+fn test_parse_toplevel() {
+    let mut b1 = std::io::with_str_reader("   rules { }   ", LookaheadBuffer::new);
+    parse_toplevel_block(&mut b1);
+
+    let mut b2 = std::io::with_str_reader("shwemba { }   ", LookaheadBuffer::new);
+    parse_toplevel_block(&mut b2);
+
+    let mut b3 = std::io::with_str_reader("defs { ausmaus }   ", LookaheadBuffer::new);
+    parse_toplevel_block(&mut b3);
 }
 
 // fn parse_regexp() {
