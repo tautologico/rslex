@@ -13,6 +13,8 @@ mod regexp;
 
 // --- utility functions -------------------------------------------
 
+pub static EOF : char = (-1 as char);
+
 #[inline]
 fn is_eof(c: char) -> bool {
     c == (-1 as char)
