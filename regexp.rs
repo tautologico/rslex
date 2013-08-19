@@ -37,9 +37,11 @@ fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
 fn test_parse_string() {
     let mut b1 = std::io::with_str_reader("abc'* ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_string(&mut b1, '\''), &~"abc"));
+    assert!(b1.next_char() == '*');
 
     let mut b2 = std::io::with_str_reader("abc'def\"  ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_string(&mut b2, '"'), &~"abc'def"));
+    assert!(b2.next_char() == ' '); 
 }
 
 #[test]
@@ -62,6 +64,7 @@ fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
         res.push_char(c);
         c = buffer.next_char();
     }
+    buffer.return_char(c);
     res
 }
 
@@ -69,12 +72,21 @@ fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
 fn test_parse_id() {
     let mut b1 = std::io::with_str_reader("abc'* ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_id(&mut b1, 'x'), &~"xabc"));
+    assert!(b1.next_char() == '\'');
 
     let mut b2 = std::io::with_str_reader("bc_def   ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_id(&mut b2, 'a'), &~"abc_def"));
 
     let mut b3 = std::io::with_str_reader("_times|'xy')*   ", LookaheadBuffer::new);
     assert!(std::str::eq(&parse_id(&mut b3, 'n'), &~"n_times"));
+    assert!(b3.next_char() == '|');
+
+    let mut b4 = std::io::with_str_reader(" +xy)*   ", LookaheadBuffer::new);
+    assert!(std::str::eq(&parse_id(&mut b4, 'n'), &~"n"));
+    assert!(b4.next_char() == ' ');
+    assert!(b4.next_char() == '+');
+    assert!(b4.next_char() == 'x');
+    assert!(std::str::eq(&parse_id(&mut b4, 'x'), &~"xy"));
 }
 
 fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
