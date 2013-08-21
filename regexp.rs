@@ -13,11 +13,12 @@ use parser::LookaheadBuffer;
 use parser::skip_whitespace;
 use parser::EOF;
 
+#[deriving(Eq)]
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
-             Plus, Bar, String(~str), Eof }
+             Plus, Bar, Dash, String(~str), Eof }
 
 enum Ast { Symb(~str), Union(~Ast, ~Ast), 
-           Conc(~Ast, ~Ast), Star(~Ast), Epsilon }
+           Conc(~Ast, ~Ast), Star(~Ast), CharClass(char, char), Epsilon }
 
 
 fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
@@ -99,12 +100,48 @@ fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
         '*' => ~Asterisk,
         '+' => ~Plus,
         '|' => ~Bar,
+        '-' => ~Dash,
         '\'' => ~String(parse_string(buffer, '\'')),
         '"' => ~String(parse_string(buffer, '"')),
         c if std::char::is_alphabetic(c) => ~Id(parse_id(buffer, c)),
         EOF => ~Eof,
-        _ => ~Eof // TODO: signal error?
+        c => fail!(fmt!("Unexpected character: %c\n", c))
     }
+}
+
+#[test]
+fn test_get_next_token() {
+    let mut b1 = std::io::with_str_reader("'return'", LookaheadBuffer::new);
+    assert!(get_next_token(&mut b1) == ~String(~"return"));
+
+    let mut b2 = std::io::with_str_reader("return", LookaheadBuffer::new);
+    assert!(get_next_token(&mut b2) == ~Id(~"return"));
+
+    let mut b3 = std::io::with_str_reader("(['a'-'z'])(['A'-'Z'])*", LookaheadBuffer::new);
+    assert!(get_next_token(&mut b3) == ~LParen);
+    assert!(get_next_token(&mut b3) == ~LBrack);
+    assert!(get_next_token(&mut b3) == ~String(~"a"));
+    assert!(get_next_token(&mut b3) == ~Dash);
+    assert!(get_next_token(&mut b3) == ~String(~"z"));
+    assert!(get_next_token(&mut b3) == ~RBrack);
+    assert!(get_next_token(&mut b3) == ~RParen);
+    assert!(get_next_token(&mut b3) == ~LParen);
+    assert!(get_next_token(&mut b3) == ~LBrack);
+    assert!(get_next_token(&mut b3) == ~String(~"A"));
+    assert!(get_next_token(&mut b3) == ~Dash);
+    assert!(get_next_token(&mut b3) == ~String(~"Z"));
+    assert!(get_next_token(&mut b3) == ~RBrack);
+    assert!(get_next_token(&mut b3) == ~RParen);
+    assert!(get_next_token(&mut b3) == ~Asterisk);
+
+    let mut b4 = std::io::with_str_reader("letter (letter | digit)*", LookaheadBuffer::new);
+    assert!(get_next_token(&mut b4) == ~Id(~"letter"));
+    assert!(get_next_token(&mut b4) == ~LParen);
+    assert!(get_next_token(&mut b4) == ~Id(~"letter"));
+    assert!(get_next_token(&mut b4) == ~Bar);
+    assert!(get_next_token(&mut b4) == ~Id(~"digit"));
+    assert!(get_next_token(&mut b4) == ~RParen);
+    assert!(get_next_token(&mut b4) == ~Asterisk);
 }
 
 fn parse_regexp(buffer: &mut LookaheadBuffer) {
