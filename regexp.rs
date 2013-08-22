@@ -90,6 +90,14 @@ fn test_parse_id() {
     assert!(std::str::eq(&parse_id(&mut b4, 'x'), &~"xy"));
 }
 
+#[inline]
+fn match_next_token(buffer: &mut LookaheadBuffer, t: ~Token) {
+    let rt = get_next_token(buffer);
+    if rt != t {
+        fail!(fmt!("Unexpeced token: expected %?, got %?\n", t, rt));
+    }
+}
+
 fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
     skip_whitespace(buffer);
     match buffer.next_char() {
@@ -144,8 +152,39 @@ fn test_get_next_token() {
     assert!(get_next_token(&mut b4) == ~Asterisk);
 }
 
-fn parse_regexp(buffer: &mut LookaheadBuffer) {
-    skip_whitespace(buffer);
-    let c = buffer.next_char();
+// regexp := union
+// union  := union '|' concat | concat
+// concat := concat factor | factor
+// factor := (regexp) | regexp'*' | regexp'+' | class | id | str
+// class  := '[' (char | range)* ']'
+// range  := char'-'char
+
+// parse a regexp from buffer until one of the terminators in term occurs
+pub fn parse_regexp(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
+    parse_union(buffer, term)
 }
 
+fn parse_union(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
+    let left = parse_concat(buffer, term);
+    if get_next_token(buffer) == ~Bar {
+        let right = parse_union(buffer, term);
+        ~Union(left, right)
+    }
+    else {
+        left
+    }
+}
+
+fn parse_concat(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
+    ~Epsilon
+}
+
+fn parse_factor(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
+    let pre = match get_next_token(buffer) {
+        ~LParen => { let e = parse_regexp(buffer, term); 
+                     match_next_token(buffer, ~RParen); 
+                     e }
+        _ => ~Epsilon
+    };
+    pre
+}
