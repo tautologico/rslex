@@ -17,8 +17,9 @@ use parser::EOF;
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
              Plus, Bar, Dash, String(~str), Eof }
 
-enum Ast { Symb(~str), Union(~Ast, ~Ast), 
-           Conc(~Ast, ~Ast), Star(~Ast), CharClass(char, char), Epsilon }
+enum Ast { Symb(~str), Str(~str), Union(~Ast, ~Ast), 
+           Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), 
+           CharClass(char, char), Epsilon }
 
 
 fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
@@ -176,7 +177,22 @@ fn parse_union(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
 }
 
 fn parse_concat(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
-    ~Epsilon
+    let left = parse_factor(buffer, term);
+    let right = parse_factor(buffer, term);
+    ~Conc(left, right)
+}
+
+fn trailing_closure(buffer: &mut LookaheadBuffer) -> Option<char> {
+    skip_whitespace(buffer);
+    match buffer.next_char() {
+        '*' => Some('*'),
+        '+' => Some('+'),
+        c => { buffer.return_char(c); None }
+    }
+}
+
+fn parse_character_class(buffer: &mut LookaheadBuffer) -> ~Ast {
+    ~Epsilon         // TODO
 }
 
 fn parse_factor(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
@@ -184,7 +200,15 @@ fn parse_factor(buffer: &mut LookaheadBuffer, term: &[~str]) -> ~Ast {
         ~LParen => { let e = parse_regexp(buffer, term); 
                      match_next_token(buffer, ~RParen); 
                      e }
-        _ => ~Epsilon
+        ~LBrack => parse_character_class(buffer),
+        ~Id(s) => ~Symb(s),
+        ~String(s) => ~Str(s),  // TODO: check for END
+        _ => ~Epsilon        // TODO: error
     };
-    pre
+    match trailing_closure(buffer) {
+        Some('*') => ~Star(pre),
+        Some('+') => ~OnePlus(pre),
+        Some(_) => fail!("Unexpected closure character"),
+        None => pre
+    }
 }
