@@ -11,7 +11,7 @@ extern mod std;
 
 use parser::LookaheadBuffer;
 use parser::skip_whitespace;
-use parser::EOF;
+use parser::is_eof;
 
 #[deriving(Eq)]
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
@@ -26,7 +26,7 @@ fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
     let mut res : ~str = ~"";
     let mut c = buffer.next_char();
     while c != delim {
-        if (c == EOF) {
+        if (is_eof(c)) {
             fail!(fmt!("Unexpected end of file. Expected closing %c", delim));
         }
         res.push_char(c);
@@ -113,7 +113,7 @@ fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
         '\'' => ~String(parse_string(buffer, '\'')),
         '"' => ~String(parse_string(buffer, '"')),
         c if std::char::is_alphabetic(c) => ~Id(parse_id(buffer, c)),
-        EOF => ~Eof,
+        c if is_eof(c) => ~Eof,
         c => fail!(fmt!("Unexpected character: %c\n", c))
     }
 }

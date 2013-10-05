@@ -13,11 +13,9 @@ mod regexp;
 
 // --- utility functions -------------------------------------------
 
-pub static EOF : char = (-1 as char);
-
 #[inline]
-fn is_eof(c: char) -> bool {
-    c == (-1 as char)
+pub fn is_eof(c: char) -> bool {
+    c == (-1u8 as char)
 }
 
 
@@ -117,7 +115,7 @@ mod buffer_tests {
         assert!(buffer.next_char() == 'a');
         assert!(buffer.next_char() == 'b');
         assert!(buffer.next_char() == 'c');
-        assert!(buffer.next_char() == -1 as char);
+        assert!(buffer.next_char() == -1u8 as char);
     }
 
     #[test]
@@ -126,10 +124,10 @@ mod buffer_tests {
         assert!(buffer.next_char() == 'a');
         assert!(buffer.next_char() == 'b');
         assert!(buffer.next_char() == 'c');
-        assert!(buffer.next_char() == -1 as char);        
-        buffer.return_char(-1 as char);
+        assert!(buffer.next_char() == -1u8 as char);        
+        buffer.return_char(-1u8 as char);
         assert!(buffer.valid);
-        assert!(buffer.next_char() == -1 as char);
+        assert!(buffer.next_char() == -1u8 as char);
     }
 }
 
