@@ -19,7 +19,7 @@ use std::rt::io::FileStream;
 /// A lookahead buffer for reading input characters
 struct LookaheadBuffer {
     contents: ~str,
-    index: uint
+    index: uint           // TODO: change to iterator to avoid encoding issues
 }
 
 impl LookaheadBuffer {
@@ -94,6 +94,22 @@ mod buffer_tests {
         assert!(!buffer.is_depleted());
         assert_eq!(buffer.next_char(), 'f');
         assert!(buffer.is_depleted());
+    }
+
+    #[test]
+    fn from_file() {
+        let mut buffer = LookaheadBuffer::from_file("Makefile");
+        assert_eq!(buffer.next_char(), 'a');
+        assert_eq!(buffer.next_char(), 'l');
+        assert_eq!(buffer.next_char(), 'l');
+        assert_eq!(buffer.next_char(), ':');
+        assert_eq!(buffer.next_char(), ' ');
+        assert_eq!(buffer.next_char(), 'r');
+        assert_eq!(buffer.next_char(), 's');
+        assert_eq!(buffer.next_char(), 'l');
+        assert_eq!(buffer.next_char(), 'e');
+        assert_eq!(buffer.next_char(), 'x');
+        assert!(!buffer.is_depleted());        
     }
 }
 
