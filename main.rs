@@ -7,7 +7,8 @@
 // Andrei de A. Formiga, 2013-07-31
 //
 
-mod parser;
+//mod parser;
+mod buffer;
 
 struct Definition {
     id: ~str,
@@ -54,12 +55,12 @@ fn build_desc_from_lines(lines: ~[~str]) -> ~LexerSpec {
     ~LexerSpec { defs: ds, rules: rs, code: cd }
 }
 
-fn read_lexer_spec(specfile: &str) -> Result<~LexerSpec, ~str> {
-    match std::io::file_reader(&Path(specfile)) {
-        Ok(reader) => { parser::parse_lexer_spec(reader); Ok(build_desc_from_lines(reader.read_lines())) }
-        Err(msg) => Err(~"Error opening file: " + msg)
-    }
-}
+// fn read_lexer_spec(specfile: &str) -> Result<~LexerSpec, ~str> {
+//     match std::io::file_reader(&Path(specfile)) {
+//         Ok(reader) => { parser::parse_lexer_spec(reader); Ok(build_desc_from_lines(reader.read_lines())) }
+//         Err(msg) => Err(~"Error opening file: " + msg)
+//     }
+// }
 
 fn print_spec(spec: ~LexerSpec) {
     println("%% Definitions:");
@@ -78,9 +79,9 @@ fn main() {
     }
     else { 
         println(fmt!("Ok, we'll now process your lex file %s", args[1])); 
-        match read_lexer_spec(args[1]) {
-            Ok(desc) => print_spec(desc),
-            Err(msg) => println(msg)
-        }
+        // match read_lexer_spec(args[1]) {
+        //     Ok(desc) => print_spec(desc),
+        //     Err(msg) => println(msg)
+        // }
     }
 }
