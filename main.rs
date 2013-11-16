@@ -7,6 +7,8 @@
 // Andrei de A. Formiga, 2013-07-31
 //
 
+#[feature(globs)];
+
 //mod parser;
 mod buffer;
 
@@ -22,7 +24,7 @@ struct LexerSpec {
 }
 
 fn usage(progname: &str) {
-    println(fmt!("Usage: %s <input file>", progname))
+    println!("Usage: {} <input file>", progname)
 }
 
 enum ReadState { Definitions, Rules, Code, }
@@ -78,7 +80,7 @@ fn main() {
         usage(args[0]);
     }
     else { 
-        println(fmt!("Ok, we'll now process your lex file %s", args[1])); 
+        println!("Ok, we'll now process your lex file {}", args[1]); 
         // match read_lexer_spec(args[1]) {
         //     Ok(desc) => print_spec(desc),
         //     Err(msg) => println(msg)

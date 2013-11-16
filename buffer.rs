@@ -9,12 +9,11 @@
 
 extern mod std;
 
-use std::rt::io::file::open;
-use std::rt::io::{Open, Create, Read, Write, SeekEnd, SeekSet};
-use std::rt::io::Seek;
-use std::rt::io::Reader;
-use std::rt::io::Writer;
-use std::rt::io::FileStream;
+use std::io::{SeekEnd, SeekSet};
+use std::io::Seek;
+use std::io::Reader;
+//use std::io::Writer;
+use std::io::File;
 
 /// A lookahead buffer for reading input characters
 struct LookaheadBuffer {
@@ -120,14 +119,14 @@ fn file_contents(name: &str) -> ~str {
     read_contents(&mut f)
 }
 
-fn get_size(f: &mut FileStream) -> u64 {
+fn get_size(f: &mut File) -> u64 {
     f.seek(0, SeekEnd);
     let res = f.tell();
     f.seek(0, SeekSet);
     res
 }
 
-fn read_contents(f: &mut FileStream) -> ~str {
+fn read_contents(f: &mut File) -> ~str {
     let size = get_size(f) as uint;
     let mut contents = std::vec::from_elem(size as uint, 0x00_u8);
     match f.read(contents) {
@@ -136,8 +135,8 @@ fn read_contents(f: &mut FileStream) -> ~str {
     }
 }
 
-fn open_or_fail(name: &str) -> FileStream {
-    match open(&Path(name), Open, Read) {
+fn open_or_fail(name: &str) -> File {
+    match File::open(&Path::new(name)) {
         Some(f) => f,
         None => fail!("Could not open file\n")
     }

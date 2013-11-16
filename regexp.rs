@@ -27,7 +27,7 @@ fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
     let mut c = buffer.next_char();
     while c != delim {
         if (is_eof(c)) {
-            fail!(fmt!("Unexpected end of file. Expected closing %c", delim));
+            fail!("Unexpected end of file. Expected closing {}", delim);
         }
         res.push_char(c);
         c = buffer.next_char();
@@ -95,7 +95,7 @@ fn test_parse_id() {
 fn match_next_token(buffer: &mut LookaheadBuffer, t: ~Token) {
     let rt = get_next_token(buffer);
     if rt != t {
-        fail!(fmt!("Unexpeced token: expected %?, got %?\n", t, rt));
+        fail!("Unexpeced token: expected {:?}, got {:?}", t, rt);
     }
 }
 
@@ -114,7 +114,7 @@ fn get_next_token(buffer: &mut LookaheadBuffer) -> ~Token {
         '"' => ~String(parse_string(buffer, '"')),
         c if std::char::is_alphabetic(c) => ~Id(parse_id(buffer, c)),
         c if is_eof(c) => ~Eof,
-        c => fail!(fmt!("Unexpected character: %c\n", c))
+        c => fail!("Unexpected character: {}", c)
     }
 }
 
