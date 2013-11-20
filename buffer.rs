@@ -16,47 +16,6 @@ use std::io::Reader;
 use std::io::File;
 use std::str::CharIterator;
 
-/// A lookahead buffer for reading input characters
-struct Buffer2 {
-    contents: ~str,
-    index: uint            // TODO: change to iterator to avoid encoding issues
-}
-
-impl Buffer2 {
-    fn new(s: ~str) -> Buffer2 {
-        Buffer2 { contents: s, index: 0 }
-    }
-
-    fn from_file(fname: &str) -> Buffer2 {
-        let cont = file_contents(fname);
-        Buffer2 { contents: cont, index: 0 }
-    }
-
-    pub fn len(&self) -> uint {
-        self.contents.len()
-    }
-
-    pub fn is_depleted(&self) -> bool {
-        self.contents.len() == self.index
-    }
-
-    /// Returns the next char from the buffer. Behavior undefined 
-    /// if the buffer is depleted.
-    fn next_char(&mut self) -> char {
-        let res = self.contents[self.index];
-        if self.index < self.contents.len() {
-            self.index = self.index + 1;
-        }
-        res as char     // FIX: assume ASCII encoding
-    }
-
-    fn return_char(&mut self) {
-        if self.index > 0 {
-            self.index = self.index - 1;
-        }
-    }
-}
-
 /// Allows the use of one "lookahead" character, which can be 
 /// returned to the stream. Basically similar to a `Peekable`
 /// iterator but with a more convenient interface 
