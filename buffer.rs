@@ -14,21 +14,22 @@ use std::io::Seek;
 use std::io::Reader;
 //use std::io::Writer;
 use std::io::File;
+use std::str::CharIterator;
 
 /// A lookahead buffer for reading input characters
-struct LookaheadBuffer {
+struct Buffer2 {
     contents: ~str,
-    index: uint           // TODO: change to iterator to avoid encoding issues
+    index: uint            // TODO: change to iterator to avoid encoding issues
 }
 
-impl LookaheadBuffer {
-    fn new(s: ~str) -> LookaheadBuffer {
-        LookaheadBuffer { contents: s, index: 0 }
+impl Buffer2 {
+    fn new(s: ~str) -> Buffer2 {
+        Buffer2 { contents: s, index: 0 }
     }
 
-    fn from_file(fname: &str) -> LookaheadBuffer {
+    fn from_file(fname: &str) -> Buffer2 {
         let cont = file_contents(fname);
-        LookaheadBuffer { contents: cont, index: 0 }
+        Buffer2 { contents: cont, index: 0 }
     }
 
     pub fn len(&self) -> uint {
@@ -56,6 +57,46 @@ impl LookaheadBuffer {
     }
 }
 
+/// Allows the use of one "lookahead" character, which can be 
+/// returned to the stream. Basically similar to a `Peekable`
+/// iterator but with a more convenient interface 
+/// (for a case where peek is used all the time 
+///  and it almost always should advance the iterator)
+struct LookaheadBuffer<'r> {
+    contents: &'r str,
+    iter: CharIterator<'r>,
+    peek: Option<char>
+}
+
+impl<'r> LookaheadBuffer<'r> {
+    fn new(s: &'r str) -> LookaheadBuffer<'r> {
+        LookaheadBuffer { contents: s, iter: s.iter(), peek: None }
+    }
+
+    fn len(&self) -> uint {
+        self.contents.len()
+    }
+
+    fn next_char(&mut self) -> Option<char> {
+        match self.peek {
+            None => self.iter.next(),
+            Some(c) => { 
+                self.peek = None;
+                Some(c)
+            }
+        }
+    }
+
+    /// Returns `c` to the character stream, to be returned as the 
+    /// next char. If `return_char` is called twice without an intervening
+    /// `next_char`, the buffer will forget the previous returned character. 
+    fn return_char(&mut self, c: char) {
+        self.peek = Some(c)
+    }
+}
+
+
+
 // --- tests ----------------------------------------------------
 #[cfg(test)]
 mod buffer_tests {
@@ -63,52 +104,64 @@ mod buffer_tests {
 
     #[test]
     fn no_buffer_use() {
-        let mut buffer = LookaheadBuffer::new(~"abcdef");
+        let mut buffer = LookaheadBuffer::new("abcdef");
         assert_eq!(buffer.len(), 6);
-        assert!(!buffer.is_depleted());
-        assert_eq!(buffer.next_char(), 'a');
-        assert_eq!(buffer.next_char(), 'b');
-        assert_eq!(buffer.next_char(), 'c');
-        assert_eq!(buffer.next_char(), 'd');
-        assert_eq!(buffer.next_char(), 'e');
-        assert_eq!(buffer.next_char(), 'f');
-        assert!(buffer.is_depleted());
+        assert_eq!(buffer.next_char(), Some('a'));
+        assert_eq!(buffer.next_char(), Some('b'));
+        assert_eq!(buffer.next_char(), Some('c'));
+        assert_eq!(buffer.next_char(), Some('d'));
+        assert_eq!(buffer.next_char(), Some('e'));
+        assert_eq!(buffer.next_char(), Some('f'));
+        assert_eq!(buffer.next_char(), None);
+    }
+
+    #[test]
+    fn no_buffer_use_iterator() {
+        let mut iter = "abcdef".iter().peekable();
+        assert_eq!(iter.next(), Some('a'));
+        assert_eq!(iter.next(), Some('b'));
+        
+        match iter.peek() {
+            None => fail!("Should not be none"),
+            Some(c) => assert_eq!(*c, 'c')
+        }
+
+        assert_eq!(iter.next(), Some('c'));
+    }
+
+    #[test]
+    fn buffer_use_return_variable() {
+        let mut buffer = LookaheadBuffer::new("abcdef");
+        assert_eq!(buffer.next_char(), Some('a'));
+        let c = match buffer.next_char() {
+            None => fail!("Should not be none"),
+            Some(ch) => ch
+        };
+
+        assert_eq!(c, 'b');
+
+        buffer.return_char(c);
+
+        assert_eq!(buffer.next_char(), Some('b'));
     }
 
     #[test]
     fn buffer_use() {
-        let mut buffer = LookaheadBuffer::new(~"abcdef");
-        assert_eq!(buffer.next_char(), 'a');
-        buffer.return_char();
-        assert_eq!(buffer.next_char(), 'a');
-        assert_eq!(buffer.next_char(), 'b');
-        assert_eq!(buffer.next_char(), 'c');
-        buffer.return_char();
-        assert_eq!(buffer.next_char(), 'c');
-        assert_eq!(buffer.next_char(), 'd');
-        assert_eq!(buffer.next_char(), 'e');
-        assert_eq!(buffer.next_char(), 'f');
-        assert!(buffer.is_depleted());
-        buffer.return_char();
-        assert!(!buffer.is_depleted());
-        assert_eq!(buffer.next_char(), 'f');
-        assert!(buffer.is_depleted());
-    }
-
-    #[test]
-    fn from_file() {
-        let mut buffer = LookaheadBuffer::from_file("Makefile");
-        assert_eq!(buffer.next_char(), 'a');
-        assert_eq!(buffer.next_char(), 'l');
-        assert_eq!(buffer.next_char(), 'l');
-        assert_eq!(buffer.next_char(), ':');
-        assert_eq!(buffer.next_char(), ' ');
-        assert_eq!(buffer.next_char(), 'r');
-        assert_eq!(buffer.next_char(), 's');
-        assert_eq!(buffer.next_char(), 'l');
-        assert_eq!(buffer.next_char(), 'e');
-        assert_eq!(buffer.next_char(), 'x');
-        assert!(!buffer.is_depleted());        
+        let mut buffer = LookaheadBuffer::new("abcdef");
+        assert_eq!(buffer.next_char(), Some('a'));
+        buffer.return_char('a');
+        assert_eq!(buffer.next_char(), Some('a'));
+        assert_eq!(buffer.next_char(), Some('b'));
+        assert_eq!(buffer.next_char(), Some('c'));
+        buffer.return_char('c');
+        assert_eq!(buffer.next_char(), Some('c'));
+        assert_eq!(buffer.next_char(), Some('d'));
+        assert_eq!(buffer.next_char(), Some('e'));
+        assert_eq!(buffer.next_char(), Some('f'));
+        assert_eq!(buffer.next_char(), None);
+        buffer.return_char('f');
+        assert_eq!(buffer.next_char(), Some('f'));
+        assert_eq!(buffer.next_char(), None);
     }
 }
 
