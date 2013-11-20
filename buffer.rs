@@ -9,11 +9,6 @@
 
 extern mod std;
 
-use std::io::{SeekEnd, SeekSet};
-use std::io::Seek;
-use std::io::Reader;
-//use std::io::Writer;
-use std::io::File;
 use std::str::CharIterator;
 
 /// Allows the use of one "lookahead" character, which can be 
@@ -124,32 +119,3 @@ mod buffer_tests {
     }
 }
 
-
-// --- utility functions ----------------------------------------
-fn file_contents(name: &str) -> ~str {
-    let mut f = open_or_fail(name);
-    read_contents(&mut f)
-}
-
-fn get_size(f: &mut File) -> u64 {
-    f.seek(0, SeekEnd);
-    let res = f.tell();
-    f.seek(0, SeekSet);
-    res
-}
-
-fn read_contents(f: &mut File) -> ~str {
-    let size = get_size(f) as uint;
-    let mut contents = std::vec::from_elem(size as uint, 0x00_u8);
-    match f.read(contents) {
-        Some(l) if l == size => std::str::from_utf8(contents),
-        _ => fail!("Could not read file\n")
-    }
-}
-
-fn open_or_fail(name: &str) -> File {
-    match File::open(&Path::new(name)) {
-        Some(f) => f,
-        None => fail!("Could not open file\n")
-    }
-}
