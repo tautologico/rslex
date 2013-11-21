@@ -11,7 +11,8 @@
 
 //mod parser;
 mod buffer;
-mod io;
+mod regexp;
+//mod io;
 
 struct Definition {
     id: ~str,

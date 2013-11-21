@@ -23,15 +23,15 @@ struct LookaheadBuffer<'r> {
 }
 
 impl<'r> LookaheadBuffer<'r> {
-    fn new(s: &'r str) -> LookaheadBuffer<'r> {
+    pub fn new(s: &'r str) -> LookaheadBuffer<'r> {
         LookaheadBuffer { contents: s, iter: s.iter(), peek: None }
     }
 
-    fn len(&self) -> uint {
+    pub fn len(&self) -> uint {
         self.contents.len()
     }
 
-    fn next_char(&mut self) -> Option<char> {
+    pub fn next_char(&mut self) -> Option<char> {
         match self.peek {
             None => self.iter.next(),
             Some(c) => { 
@@ -44,7 +44,7 @@ impl<'r> LookaheadBuffer<'r> {
     /// Returns `c` to the character stream, to be returned as the 
     /// next char. If `return_char` is called twice without an intervening
     /// `next_char`, the buffer will forget the previous returned character. 
-    fn return_char(&mut self, c: char) {
+    pub fn return_char(&mut self, c: char) {
         self.peek = Some(c)
     }
 }
