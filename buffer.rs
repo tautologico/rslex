@@ -47,13 +47,23 @@ impl<'r> LookaheadBuffer<'r> {
     pub fn return_char(&mut self, c: char) {
         self.peek = Some(c)
     }
+
+    pub fn skip_whitespace(&mut self) {
+        loop {
+            match self.next_char() {
+                None => break,
+                Some(c) if !std::char::is_whitespace(c) => { self.return_char(c); break }
+                Some(_) => ()
+            }
+        }
+    }
 }
 
 
 
 // --- tests ----------------------------------------------------
 #[cfg(test)]
-mod buffer_tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -115,6 +125,20 @@ mod buffer_tests {
         assert_eq!(buffer.next_char(), None);
         buffer.return_char('f');
         assert_eq!(buffer.next_char(), Some('f'));
+        assert_eq!(buffer.next_char(), None);
+        assert_eq!(buffer.next_char(), None);
+    }
+
+    #[test]
+    fn test_skip_ws() {
+        let mut buffer = LookaheadBuffer::new("   abc   ");
+        buffer.skip_whitespace();
+        assert_eq!(buffer.next_char(), Some('a'));
+        buffer.skip_whitespace();
+        assert_eq!(buffer.next_char(), Some('b'));
+        buffer.skip_whitespace();
+        assert_eq!(buffer.next_char(), Some('c'));
+        buffer.skip_whitespace();
         assert_eq!(buffer.next_char(), None);
     }
 }

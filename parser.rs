@@ -132,28 +132,6 @@ mod buffer_tests {
 }
 
 
-pub fn skip_whitespace(buffer: &mut LookaheadBuffer) {
-    let mut c = buffer.next_char();
-    while (!is_eof(c) && std::char::is_whitespace(c)) {
-        c = buffer.next_char();
-    }
-    buffer.return_char(c);
-}
-
-#[test]
-fn test_skip_ws() {
-    let mut buffer = std::io::with_str_reader("   abc   ", LookaheadBuffer::new);
-    skip_whitespace(&mut buffer);
-    assert!(buffer.next_char() == 'a');
-    skip_whitespace(&mut buffer);
-    assert!(buffer.next_char() == 'b');
-    skip_whitespace(&mut buffer);
-    assert!(buffer.next_char() == 'c');
-    skip_whitespace(&mut buffer);
-    assert!(is_eof(buffer.next_char()));
-}
-
-
 // --- lexer spec parsing ------------------------------------------
 
 // token types 
