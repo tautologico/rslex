@@ -1,9 +1,9 @@
 all: rslex
 
-rslex: main.rs parser.rs buffer.rs
+rslex: main.rs parser.rs buffer.rs regexp.rs
 	rustc -o rslex main.rs
 
-test: main.rs parser.rs buffer.rs
+test: main.rs parser.rs buffer.rs regexp.rs 
 	rustc -o test --test main.rs
 
 clean:
