@@ -13,14 +13,14 @@ use buffer::LookaheadBuffer;
 
 #[deriving(Eq, Clone)]
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
-             Plus, Bar, Dash, String(~str), End, Eof, Error(char) }
+             Plus, Question, Bar, Dash, String(~str), End, Eof, Error(char) }
 
 #[deriving(Eq)]
 pub enum ClassItem { Singles(~str), Range(char, char) }
 
 #[deriving(Eq)]
 pub enum Ast { Symb(~str), Str(~str), Union(~Ast, ~Ast),
-               Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), 
+               Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), Opt(~Ast),
                CharClass(~[ClassItem]), Epsilon }
 
 /// A token stream with capacity for lookahead of 1 token
@@ -53,6 +53,7 @@ impl<'r> TokenStream<'r> {
             Some(')') => RParen,
             Some('*') => Asterisk,
             Some('+') => Plus,
+            Some('?') => Question,
             Some('|') => Bar,
             Some('-') => Dash,
             Some('\'') => String(self.parse_string('\'')),
@@ -167,6 +168,7 @@ fn trailing_closure(ts: &mut TokenStream) -> Option<Token> {
     match ts.next_token() {
         Asterisk => Some(Asterisk),
         Plus => Some(Plus),
+        Question => Some(Question),
         t => { ts.return_token(t); None }
     }
 }
@@ -211,6 +213,7 @@ fn parse_factor(ts: &mut TokenStream) -> Ast {
     match trailing_closure(ts) {
         Some(Asterisk) => Star(~pre),
         Some(Plus) => OnePlus(~pre),
+        Some(Question) => Opt(~pre),
         Some(_) => fail!("Unexpected closure character"),
         None => pre
     }
@@ -219,7 +222,7 @@ fn parse_factor(ts: &mut TokenStream) -> Ast {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::{LBrack, RBrack, Id, LParen, RParen, Asterisk, Bar, Dash, String, End, Eof, Error };
+    use super::{LBrack, RBrack, Id, LParen, RParen, Asterisk, Question, Bar, Dash, String, End, Eof, Error };
     use super::{CharClass};
     use super::{parse_character_class};
     use buffer::LookaheadBuffer;
@@ -274,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_token_raw() {
+    fn test_next_token() {
         let term = [','];
         let mut b1 = LookaheadBuffer::new("'return'");
         let mut ts1 = TokenStream::new(&mut b1, term);
@@ -324,9 +327,10 @@ mod tests {
         assert_eq!(ts4.next_token(), Asterisk);
         assert_eq!(ts4.next_token(), End);
 
-        let mut b5 = LookaheadBuffer::new("let  & dig,");
+        let mut b5 = LookaheadBuffer::new("let?  & dig,");
         let mut ts5 = TokenStream::new(&mut b5, term);
         assert_eq!(ts5.next_token(), Id(~"let"));
+        assert_eq!(ts5.next_token(), Question);
         assert_eq!(ts5.next_token(), Error('&'));
     }
 
@@ -393,5 +397,11 @@ mod tests {
         assert_eq!(parse_regexp(&mut ts4),
                    Conc(~OnePlus(~CharClass(~[Range('0', '9')])), 
                         ~Conc(~Str(~"."), ~OnePlus(~CharClass(~[Range('0', '9')])))));
+
+        let mut b5 = LookaheadBuffer::new("let dig | let (dig | let)?,");
+        let mut ts5 = TokenStream::new(&mut b5, term);
+        assert_eq!(parse_regexp(&mut ts5), 
+                   Union(~Conc(~Symb(~"let"), ~Symb(~"dig")), 
+                         ~Conc(~Symb(~"let"), ~Opt(~Union(~Symb(~"dig"), ~Symb(~"let"))))) ); 
     }
 }
