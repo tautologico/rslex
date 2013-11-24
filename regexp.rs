@@ -10,146 +10,107 @@
 extern mod std;
 
 use buffer::LookaheadBuffer;
-//use parser::skip_whitespace;
 
-#[deriving(Eq)]
+#[deriving(Eq, Clone)]
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
-             Plus, Bar, Dash, String(~str), Eof }
+             Plus, Bar, Dash, String(~str), End, Eof, Error(char) }
 
-enum Ast { Symb(~str), Str(~str), Union(~Ast, ~Ast),
+pub enum Ast { Symb(~str), Str(~str), Union(~Ast, ~Ast),
            Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), 
            CharClass(char, char), Epsilon }
 
-fn parse_string(buffer: &mut LookaheadBuffer, delim: char) -> ~str {
-    let mut res : ~str = ~"";
-    loop {
-        match buffer.next_char() {
-            None => fail!("Unexpected end of file. Expected closing {}", delim),
-            Some(c) if c == delim => break,
-            Some(c) => res.push_char(c)
+/// A token stream with capacity for lookahead of 1 token
+struct TokenStream<'r> {
+    buffer: &'r mut LookaheadBuffer<'r>,
+    term: &'r [char],
+    peek: Option<Token>
+}
+
+impl<'r> TokenStream<'r> {
+    pub fn new(buffer: &'r mut LookaheadBuffer<'r>, term: &'r [char]) -> TokenStream<'r> {
+        TokenStream { buffer: buffer, term: term, peek: None }
+    }
+
+    fn next_token(&mut self) -> Token {
+        let res = match self.peek {
+            None => self.next_token_raw(),
+            Some(ref t) => (*t).clone()
+        };
+        self.peek = None;
+        res
+    }
+
+    fn next_token_raw(&mut self) -> Token {
+        self.buffer.skip_whitespace();
+        match self.buffer.next_char() {
+            Some('[') => LBrack,
+            Some(']') => RBrack,
+            Some('(') => LParen,
+            Some(')') => RParen,
+            Some('*') => Asterisk,
+            Some('+') => Plus,
+            Some('|') => Bar,
+            Some('-') => Dash,
+            Some('\'') => String(self.parse_string('\'')),
+            Some('"') => String(self.parse_string('"')),
+            Some(c) if std::char::is_alphabetic(c) => Id(self.parse_id(c)),
+            Some(c) if is_terminator(c, self.term) => End,
+            None => Eof,
+            Some(c) => Error(c)
         }
     }
-    res
+
+    fn return_token(&mut self, tok: Token) {
+        self.peek = Some(tok);
+    }
+
+    fn parse_string(&mut self, delim: char) -> ~str {
+        let mut res : ~str = ~"";
+        loop {
+            match self.buffer.next_char() {
+                None => fail!("Unexpected end of file. Expected closing {}", delim),
+                Some(c) if c == delim => break,
+                Some(c) => res.push_char(c)
+            }
+        }
+        res    
+    }
+
+    fn parse_id(&mut self, first: char) -> ~str {
+        let mut res : ~str = ~"";
+        res.push_char(first);
+        loop {
+            match self.buffer.next_char() {
+                Some(c) if is_id_char(c) => res.push_char(c),
+                Some(c) => { self.buffer.return_char(c); break }
+                None => break
+            }
+        }
+        res
+    }
+
+
 }
 
-#[test]
-fn test_parse_string() {
-    let mut b1 = LookaheadBuffer::new("abc'* ");
-    assert_eq!(parse_string(&mut b1, '\''), ~"abc");
-    assert_eq!(b1.next_char(), Some('*'));
-
-    let mut b2 = LookaheadBuffer::new("abc'def\"  ");
-    assert_eq!(parse_string(&mut b2, '"'), ~"abc'def");
-    assert_eq!(b2.next_char(), Some(' ')); 
-}
-
-#[test]
-#[should_fail]
-fn unclosed_string() {
-    let mut b1 = LookaheadBuffer::new("abc'def  ");
-    assert_eq!(parse_string(&mut b1, '"'), ~"abc'def");
-}
 
 #[inline]
 fn is_id_char(c: char) -> bool {
     std::char::is_alphanumeric(c) || c == '_'
 }
 
-fn parse_id(buffer: &mut LookaheadBuffer, first: char) -> ~str {
-    let mut res : ~str = ~"";
-    res.push_char(first);
-    loop {
-        match buffer.next_char() {
-            Some(c) if is_id_char(c) => res.push_char(c),
-            Some(c) => { buffer.return_char(c); break }
-            None => break
-        }
-    }
-    res
-}
-
-#[test]
-fn test_parse_id() {
-    let mut b1 = LookaheadBuffer::new("abc'* ");
-    assert_eq!(parse_id(&mut b1, 'x'), ~"xabc");
-    assert_eq!(b1.next_char(), Some('\''));
-
-    let mut b2 = LookaheadBuffer::new("bc_def   ");
-    assert_eq!(parse_id(&mut b2, 'a'), ~"abc_def");
-
-    let mut b3 = LookaheadBuffer::new("_times|'xy')*   ");
-    assert_eq!(parse_id(&mut b3, 'n'), ~"n_times");
-    assert_eq!(b3.next_char(), Some('|'));
-
-    let mut b4 = LookaheadBuffer::new(" +xy)*   ");
-    assert_eq!(parse_id(&mut b4, 'n'), ~"n");
-    assert_eq!(b4.next_char(), Some(' '));
-    assert_eq!(b4.next_char(), Some('+'));
-    assert_eq!(b4.next_char(), Some('x'));
-    assert_eq!(parse_id(&mut b4, 'x'), ~"xy");
-}
-
 #[inline]
-fn match_next_token(buffer: &mut LookaheadBuffer, t: Token) {
-    let rt = get_next_token(buffer);
+fn match_next_token(ts: &mut TokenStream, t: Token, term: &[char]) {
+    let rt = ts.next_token();
     if rt != t {
         fail!("Unexpeced token: expected {:?}, got {:?}", t, rt);
     }
 }
 
-fn get_next_token(buffer: &mut LookaheadBuffer) -> Token {
-    buffer.skip_whitespace();
-    match buffer.next_char() {
-        Some('[') => LBrack,
-        Some(']') => RBrack,
-        Some('(') => LParen,
-        Some(')') => RParen,
-        Some('*') => Asterisk,
-        Some('+') => Plus,
-        Some('|') => Bar,
-        Some('-') => Dash,
-        Some('\'') => String(parse_string(buffer, '\'')),
-        Some('"') => String(parse_string(buffer, '"')),
-        Some(c) if std::char::is_alphabetic(c) => Id(parse_id(buffer, c)),
-        None => Eof,
-        Some(c) => fail!("Unexpected character: {}", c)
-    }
+#[inline]
+fn is_terminator(c: char, term: &[char]) -> bool {
+    term.contains(&c)
 }
 
-#[test]
-fn test_get_next_token() {
-    let mut b1 = LookaheadBuffer::new("'return'");
-    assert_eq!(get_next_token(&mut b1), String(~"return"));
-
-    let mut b2 = LookaheadBuffer::new("return");
-    assert_eq!(get_next_token(&mut b2), Id(~"return"));
-
-    let mut b3 = LookaheadBuffer::new("(['a'-'z'])(['A'-'Z'])*");
-    assert_eq!(get_next_token(&mut b3), LParen);
-    assert_eq!(get_next_token(&mut b3), LBrack);
-    assert_eq!(get_next_token(&mut b3), String(~"a"));
-    assert_eq!(get_next_token(&mut b3), Dash);
-    assert_eq!(get_next_token(&mut b3), String(~"z"));
-    assert_eq!(get_next_token(&mut b3), RBrack);
-    assert_eq!(get_next_token(&mut b3), RParen);
-    assert_eq!(get_next_token(&mut b3), LParen);
-    assert_eq!(get_next_token(&mut b3), LBrack);
-    assert_eq!(get_next_token(&mut b3), String(~"A"));
-    assert_eq!(get_next_token(&mut b3), Dash);
-    assert_eq!(get_next_token(&mut b3), String(~"Z"));
-    assert_eq!(get_next_token(&mut b3), RBrack);
-    assert_eq!(get_next_token(&mut b3), RParen);
-    assert_eq!(get_next_token(&mut b3), Asterisk);
-
-    let mut b4 = LookaheadBuffer::new("letter (letter | digit)*");
-    assert_eq!(get_next_token(&mut b4), Id(~"letter"));
-    assert_eq!(get_next_token(&mut b4), LParen);
-    assert_eq!(get_next_token(&mut b4), Id(~"letter"));
-    assert_eq!(get_next_token(&mut b4), Bar);
-    assert_eq!(get_next_token(&mut b4), Id(~"digit"));
-    assert_eq!(get_next_token(&mut b4), RParen);
-    assert_eq!(get_next_token(&mut b4), Asterisk);
-}
 
 // regexp := union
 // union  := union '|' concat | concat
@@ -158,15 +119,19 @@ fn test_get_next_token() {
 // class  := '[' (char | range)* ']'
 // range  := char'-'char
 
-// parse a regexp from buffer until one of the terminators in term occurs
-pub fn parse_regexp(buffer: &mut LookaheadBuffer, term: &[~str]) -> Ast {
-    parse_union(buffer, term)
+// parse a regexp from the token stream until one of the terminators in term occurs
+pub fn parse_regexp(ts: &mut TokenStream, term: &[char]) -> Ast {
+    parse_union(ts, term)
 }
 
-fn parse_union(buffer: &mut LookaheadBuffer, term: &[~str]) -> Ast {
-    let left = parse_concat(buffer, term);
-    if get_next_token(buffer) == Bar {
-        let right = parse_union(buffer, term);
+// fn parse_unconc(buffer: &mut LookaheadBuffer, term: &[char]) -> Ast {
+//     Epsilon
+// }
+
+fn parse_union(ts: &mut TokenStream, term: &[char]) -> Ast {
+    let left = parse_concat(ts, term);
+    if ts.next_token() == Bar {
+        let right = parse_union(ts, term);
         Union(~left, ~right)
     }
     else {
@@ -174,40 +139,157 @@ fn parse_union(buffer: &mut LookaheadBuffer, term: &[~str]) -> Ast {
     }
 }
 
-fn parse_concat(buffer: &mut LookaheadBuffer, term: &[~str]) -> Ast {
-    let left = parse_factor(buffer, term);
-    let right = parse_factor(buffer, term);
-    Conc(~left, ~right)
+fn parse_concat(ts: &mut TokenStream, term: &[char]) -> Ast {
+    let first = parse_factor(ts, term);
+    let right = parse_factor(ts, term);
+    Conc(~first, ~right)
 }
 
-fn trailing_closure(buffer: &mut LookaheadBuffer) -> Option<char> {
-    buffer.skip_whitespace();
-    match buffer.next_char() {
-        Some('*') => Some('*'),
-        Some('+') => Some('+'),
-        Some(c) => { buffer.return_char(c); None },
-        None => None
+fn trailing_closure(ts: &mut TokenStream) -> Option<Token> {
+    match ts.next_token() {
+        Asterisk => Some(Asterisk),
+        Plus => Some(Plus),
+        t => { ts.return_token(t); None }
     }
 }
 
-fn parse_character_class(buffer: &mut LookaheadBuffer) -> Ast {
+fn parse_character_class(ts: &mut TokenStream) -> Ast {
     Epsilon         // TODO
 }
 
-fn parse_factor(buffer: &mut LookaheadBuffer, term: &[~str]) -> Ast {
-    let pre = match get_next_token(buffer) {
-        LParen => { let e = parse_regexp(buffer, term); 
-                    match_next_token(buffer, RParen); 
+#[inline]
+fn parse_factor(ts: &mut TokenStream, term: &[char]) -> Ast {
+    let tok = ts.next_token();
+    parse_factor_token(ts, tok, term)
+}
+
+fn parse_factor_token(ts: &mut TokenStream, tok: Token, term: &[char]) -> Ast {
+    let pre = match tok {
+        LParen => { let e = parse_regexp(ts, term); 
+                    match_next_token(ts, RParen, term); 
                     e }
-        LBrack => parse_character_class(buffer),
+        LBrack => parse_character_class(ts),
         Id(s) => Symb(s),
         String(s) => Str(s),  // TODO: check for END
         _ => Epsilon          // TODO: error
     };
-    match trailing_closure(buffer) {
-        Some('*') => Star(~pre),
-        Some('+') => OnePlus(~pre),
+    match trailing_closure(ts) {
+        Some(Asterisk) => Star(~pre),
+        Some(Plus) => OnePlus(~pre),
         Some(_) => fail!("Unexpected closure character"),
         None => pre
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::{LBrack, RBrack, Id, LParen, RParen, Asterisk, Bar, Dash, String, End, Eof, Error };
+    use buffer::LookaheadBuffer;
+
+    #[test]
+    fn test_parse_string_ts() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("abc'* ");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(ts1.parse_string('\''), ~"abc");
+        assert_eq!(ts1.buffer.next_char(), Some('*'));
+
+        let mut b2 = LookaheadBuffer::new("abc'def\"  ");
+        let mut ts2 = TokenStream::new(&mut b2, term);
+        assert_eq!(ts2.parse_string('"'), ~"abc'def");
+        assert_eq!(ts2.buffer.next_char(), Some(' ')); 
+    }
+
+    #[test]
+    #[should_fail]
+    fn unclosed_string_ts() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("abc'def  ");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(ts1.parse_string('"'), ~"abc'def");
+    }
+
+    #[test]
+    fn test_parse_id_ts() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("abc'* ");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(ts1.parse_id('x'), ~"xabc");
+        assert_eq!(ts1.buffer.next_char(), Some('\''));
+
+        let mut b2 = LookaheadBuffer::new("bc_def   ");
+        let mut ts2 = TokenStream::new(&mut b2, term);
+        assert_eq!(ts2.parse_id('a'), ~"abc_def");
+
+        let mut b3 = LookaheadBuffer::new("_times|'xy')*   ");
+        let mut ts3 = TokenStream::new(&mut b3, term);
+        assert_eq!(ts3.parse_id('n'), ~"n_times");
+        assert_eq!(ts3.buffer.next_char(), Some('|'));
+
+        let mut b4 = LookaheadBuffer::new(" +xy)*   ");
+        let mut ts4 = TokenStream::new(&mut b4, term);
+        assert_eq!(ts4.parse_id('n'), ~"n");
+        assert_eq!(ts4.buffer.next_char(), Some(' '));
+        assert_eq!(ts4.buffer.next_char(), Some('+'));
+        assert_eq!(ts4.buffer.next_char(), Some('x'));
+        assert_eq!(ts4.parse_id('x'), ~"xy");
+    }
+
+    #[test]
+    fn test_next_token_raw() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("'return'");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(ts1.next_token(), String(~"return"));
+
+        let mut b2 = LookaheadBuffer::new("return");
+        let mut ts2 = TokenStream::new(&mut b2, term);
+        assert_eq!(ts2.next_token(), Id(~"return"));
+        ts2.return_token(Id(~"return"));
+        assert_eq!(ts2.next_token(), Id(~"return"));
+        assert_eq!(ts2.next_token(), Eof);
+
+        let mut b3 = LookaheadBuffer::new("(['a'-'z'])(['A'-'Z'])*");
+        let mut ts3 = TokenStream::new(&mut b3, term);
+        assert_eq!(ts3.next_token(), LParen);
+        assert_eq!(ts3.next_token(), LBrack);
+        assert_eq!(ts3.next_token(), String(~"a"));
+        assert_eq!(ts3.next_token(), Dash);
+        assert_eq!(ts3.next_token(), String(~"z"));
+        assert_eq!(ts3.next_token(), RBrack);
+        assert_eq!(ts3.next_token(), RParen);
+        assert_eq!(ts3.next_token(), LParen);
+
+        assert_eq!(ts3.peek, None);
+        ts3.return_token(LParen);
+        assert!(!ts3.peek.is_none());
+        assert_eq!(ts3.next_token(), LParen);
+        assert_eq!(ts3.peek, None);
+
+        assert_eq!(ts3.next_token(), LBrack);
+        assert_eq!(ts3.next_token(), String(~"A"));
+        assert_eq!(ts3.next_token(), Dash);
+        assert_eq!(ts3.next_token(), String(~"Z"));
+        assert_eq!(ts3.next_token(), RBrack);
+        assert_eq!(ts3.next_token(), RParen);
+        assert_eq!(ts3.next_token(), Asterisk);
+        assert_eq!(ts3.next_token(), Eof);
+
+        let mut b4 = LookaheadBuffer::new("letter \t (letter | digit)*,");
+        let mut ts4 = TokenStream::new(&mut b4, term);
+        assert_eq!(ts4.next_token(), Id(~"letter"));
+        assert_eq!(ts4.next_token(), LParen);
+        assert_eq!(ts4.next_token(), Id(~"letter"));
+        assert_eq!(ts4.next_token(), Bar);
+        assert_eq!(ts4.next_token(), Id(~"digit"));
+        assert_eq!(ts4.next_token(), RParen);
+        assert_eq!(ts4.next_token(), Asterisk);
+        assert_eq!(ts4.next_token(), End);
+
+        let mut b5 = LookaheadBuffer::new("let  & dig,");
+        let mut ts5 = TokenStream::new(&mut b5, term);
+        assert_eq!(ts5.next_token(), Id(~"let"));
+        assert_eq!(ts5.next_token(), Error('&'));
     }
 }
