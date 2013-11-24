@@ -15,9 +15,13 @@ use buffer::LookaheadBuffer;
 enum Token { LBrack, RBrack, Id(~str), LParen, RParen, Asterisk, 
              Plus, Bar, Dash, String(~str), End, Eof, Error(char) }
 
+#[deriving(Eq)]
+pub enum ClassItem { Singles(~str), Range(char, char) }
+
+#[deriving(Eq)]
 pub enum Ast { Symb(~str), Str(~str), Union(~Ast, ~Ast),
-           Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), 
-           CharClass(char, char), Epsilon }
+               Conc(~Ast, ~Ast), Star(~Ast), OnePlus(~Ast), 
+               CharClass(~[ClassItem]), Epsilon }
 
 /// A token stream with capacity for lookahead of 1 token
 struct TokenStream<'r> {
@@ -88,8 +92,6 @@ impl<'r> TokenStream<'r> {
         }
         res
     }
-
-
 }
 
 
@@ -99,7 +101,7 @@ fn is_id_char(c: char) -> bool {
 }
 
 #[inline]
-fn match_next_token(ts: &mut TokenStream, t: Token, term: &[char]) {
+fn match_next_token(ts: &mut TokenStream, t: Token) {
     let rt = ts.next_token();
     if rt != t {
         fail!("Unexpeced token: expected {:?}, got {:?}", t, rt);
@@ -120,29 +122,45 @@ fn is_terminator(c: char, term: &[char]) -> bool {
 // range  := char'-'char
 
 // parse a regexp from the token stream until one of the terminators in term occurs
-pub fn parse_regexp(ts: &mut TokenStream, term: &[char]) -> Ast {
-    parse_union(ts, term)
+pub fn parse_regexp(ts: &mut TokenStream) -> Ast {
+    parse_union(ts)
 }
 
-// fn parse_unconc(buffer: &mut LookaheadBuffer, term: &[char]) -> Ast {
-//     Epsilon
-// }
-
-fn parse_union(ts: &mut TokenStream, term: &[char]) -> Ast {
-    let left = parse_concat(ts, term);
-    if ts.next_token() == Bar {
-        let right = parse_union(ts, term);
-        Union(~left, ~right)
-    }
-    else {
-        left
+fn parse_union(ts: &mut TokenStream) -> Ast {
+    let left = parse_concat(ts);
+    match ts.next_token() {
+        Bar => {
+            let right = parse_union(ts);
+            Union(~left, ~right)
+        }
+        tok => {
+            ts.return_token(tok);
+            left
+        }
     }
 }
 
-fn parse_concat(ts: &mut TokenStream, term: &[char]) -> Ast {
-    let first = parse_factor(ts, term);
-    let right = parse_factor(ts, term);
-    Conc(~first, ~right)
+fn parse_concat(ts: &mut TokenStream) -> Ast {
+    let left = parse_factor(ts);
+    match ts.next_token() {
+        Bar => {
+            ts.return_token(Bar);
+            left
+        }
+        End => {
+            ts.return_token(End);
+            left
+        }
+        RParen => {
+            ts.return_token(RParen);
+            left
+        }
+        tok => {
+            ts.return_token(tok);
+            let right = parse_concat(ts);
+            Conc(~left, ~right)
+        }
+    }
 }
 
 fn trailing_closure(ts: &mut TokenStream) -> Option<Token> {
@@ -154,24 +172,41 @@ fn trailing_closure(ts: &mut TokenStream) -> Option<Token> {
 }
 
 fn parse_character_class(ts: &mut TokenStream) -> Ast {
-    Epsilon         // TODO
+    let mut res = std::vec::with_capacity(2);
+    loop {
+        match ts.next_token() {
+            String(s1) => {
+                match ts.next_token() {
+                    Dash => {
+                        match ts.next_token() {
+                            String(s2) => res.push(Range(s1.char_at(0), s2.char_at(0))),
+                            _ => fail!("Ill-formed character class range")
+                        }
+                    }
+                    tok => {
+                        ts.return_token(tok);
+                        res.push(Singles(s1))
+                    }
+                }
+            }
+            Dash => fail!("Ill-formed character class range"),
+            RBrack => break,
+            tok => fail!("Unexpected token in character class: {:?}", tok)
+        }
+    }
+    CharClass(res)
 }
 
 #[inline]
-fn parse_factor(ts: &mut TokenStream, term: &[char]) -> Ast {
-    let tok = ts.next_token();
-    parse_factor_token(ts, tok, term)
-}
-
-fn parse_factor_token(ts: &mut TokenStream, tok: Token, term: &[char]) -> Ast {
-    let pre = match tok {
-        LParen => { let e = parse_regexp(ts, term); 
-                    match_next_token(ts, RParen, term); 
+fn parse_factor(ts: &mut TokenStream) -> Ast {
+    let pre = match ts.next_token() {
+        LParen => { let e = parse_regexp(ts); 
+                    match_next_token(ts, RParen); 
                     e }
         LBrack => parse_character_class(ts),
         Id(s) => Symb(s),
-        String(s) => Str(s),  // TODO: check for END
-        _ => Epsilon          // TODO: error
+        String(s) => Str(s),
+        tok => fail!("Unexpected token in regexp: {:?}", tok)
     };
     match trailing_closure(ts) {
         Some(Asterisk) => Star(~pre),
@@ -185,6 +220,8 @@ fn parse_factor_token(ts: &mut TokenStream, tok: Token, term: &[char]) -> Ast {
 mod tests {
     use super::*;
     use super::{LBrack, RBrack, Id, LParen, RParen, Asterisk, Bar, Dash, String, End, Eof, Error };
+    use super::{CharClass};
+    use super::{parse_character_class};
     use buffer::LookaheadBuffer;
 
     #[test]
@@ -291,5 +328,70 @@ mod tests {
         let mut ts5 = TokenStream::new(&mut b5, term);
         assert_eq!(ts5.next_token(), Id(~"let"));
         assert_eq!(ts5.next_token(), Error('&'));
+    }
+
+    #[test]
+    fn test_parse_charclass() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("'A'-'Z'],");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(parse_character_class(&mut ts1), CharClass(~[Range('A', 'Z')]));
+        assert_eq!(ts1.next_token(), End);
+
+        let mut b2 = LookaheadBuffer::new("]");
+        let mut ts2 = TokenStream::new(&mut b2, term);
+        assert_eq!(parse_character_class(&mut ts2), CharClass(~[]));
+
+        let mut b3 = LookaheadBuffer::new("'abcABC']");
+        let mut ts3 = TokenStream::new(&mut b3, term);
+        assert_eq!(parse_character_class(&mut ts3), CharClass(~[Singles(~"abcABC")]));
+
+        let mut b4 = LookaheadBuffer::new("'ab''cd''0'-'9''55']");
+        let mut ts4 = TokenStream::new(&mut b4, term);
+        assert_eq!(parse_character_class(&mut ts4), 
+                   CharClass(~[Singles(~"ab"), Singles(~"cd"), 
+                               Range('0', '9'), Singles(~"55")]));
+    }
+
+    #[test]
+    #[should_fail]
+    fn test_bad_charclass() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("'A'--'Z'],");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(parse_character_class(&mut ts1), CharClass(~[Range('A', 'Z')]));
+    }
+
+    #[test]
+    #[should_fail]
+    fn test_bad_charclass2() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("'A'*'Z'],");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(parse_character_class(&mut ts1), CharClass(~[Range('A', 'Z')]));
+    }
+
+    #[test]
+    fn test_parse_regexp() {
+        let term = [','];
+        let mut b1 = LookaheadBuffer::new("letter,");
+        let mut ts1 = TokenStream::new(&mut b1, term);
+        assert_eq!(parse_regexp(&mut ts1), Symb(~"letter"));
+
+        let mut b2 = LookaheadBuffer::new("letter*,");
+        let mut ts2 = TokenStream::new(&mut b2, term);
+        assert_eq!(parse_regexp(&mut ts2), Star(~Symb(~"letter")));
+
+        let mut b3 = LookaheadBuffer::new("letter (letter | digit)*,");
+        let mut ts3 = TokenStream::new(&mut b3, term);
+        assert_eq!(parse_regexp(&mut ts3), 
+                   Conc(~Symb(~"letter"), ~Star(~Union(~Symb(~"letter"), ~Symb(~"digit")))));
+        assert_eq!(ts3.next_token(), End);
+
+        let mut b4 = LookaheadBuffer::new("['0'-'9']+ '.' ['0'-'9']+,");
+        let mut ts4 = TokenStream::new(&mut b4, term);
+        assert_eq!(parse_regexp(&mut ts4),
+                   Conc(~OnePlus(~CharClass(~[Range('0', '9')])), 
+                        ~Conc(~Str(~"."), ~OnePlus(~CharClass(~[Range('0', '9')])))));
     }
 }
