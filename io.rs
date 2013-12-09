@@ -27,12 +27,14 @@ fn get_size(f: &mut File) -> u64 {
 }
 
 fn read_contents(f: &mut File) -> ~str {
-    let size = get_size(f) as uint;
-    let mut contents = std::vec::from_elem(size as uint, 0x00_u8);
-    match f.read(contents) {
-        Some(l) if l == size => std::str::from_utf8(contents),
-        _ => fail!("Could not read file\n")
-    }
+    //let size = get_size(f) as uint;
+    //let mut contents = std::vec::from_elem(size as uint, 0x00_u8);
+    // match f.read(contents) {
+    //     Some(l) if l == size => { std::str::from_utf8(contents); contents as ~str }
+    //     _ => fail!("Could not read file\n")
+    // }
+    let contents = f.read_to_end();
+    std::str::from_utf8_owned(contents)
 }
 
 fn open_or_fail(name: &str) -> File {

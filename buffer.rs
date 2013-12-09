@@ -24,7 +24,7 @@ struct LookaheadBuffer<'r> {
 
 impl<'r> LookaheadBuffer<'r> {
     pub fn new(s: &'r str) -> LookaheadBuffer<'r> {
-        LookaheadBuffer { contents: s, iter: s.iter(), peek: None }
+        LookaheadBuffer { contents: s, iter: s.chars(), peek: None }
     }
 
     pub fn len(&self) -> uint {
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn no_buffer_use_iterator() {
-        let mut iter = "abcdef".iter().peekable();
+        let mut iter = "abcdef".chars().peekable();
         assert_eq!(iter.next(), Some('a'));
         assert_eq!(iter.next(), Some('b'));
         
