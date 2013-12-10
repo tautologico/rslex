@@ -11,6 +11,32 @@ extern mod std;
 
 use std::str::CharIterator;
 
+/// A position in the input
+struct Pos {
+    /// line number (starting at 1) 
+    line: uint,
+    /// column number (starting at 0)
+    col: uint
+}
+
+impl Pos {
+    pub fn start() -> Pos {
+        Pos { line: 1, col: 0 }
+    }
+
+    pub fn next(&mut self, c: char) {
+        if c == '\n' {
+            self.line += 1;
+            self.col = 0;
+        }
+        else {
+            self.col += 1;
+        }
+    }
+}
+
+type CharPos = uint;
+
 /// Allows the use of one "lookahead" character, which can be 
 /// returned to the stream. Basically similar to a `Peekable`
 /// iterator but with a more convenient interface 
@@ -19,19 +45,20 @@ use std::str::CharIterator;
 struct LookaheadBuffer<'r> {
     contents: &'r str,
     iter: CharIterator<'r>,
-    peek: Option<char>
+    peek: Option<char>,
+    pos: CharPos
 }
 
 impl<'r> LookaheadBuffer<'r> {
     pub fn new(s: &'r str) -> LookaheadBuffer<'r> {
-        LookaheadBuffer { contents: s, iter: s.chars(), peek: None }
+        LookaheadBuffer { contents: s, iter: s.chars(), peek: None, pos: 0 }
     }
 
     pub fn len(&self) -> uint {
         self.contents.len()
     }
 
-    pub fn next_char(&mut self) -> Option<char> {
+    fn get_next_char(&mut self) -> Option<char> {
         match self.peek {
             None => self.iter.next(),
             Some(c) => { 
@@ -41,10 +68,21 @@ impl<'r> LookaheadBuffer<'r> {
         }
     }
 
+    pub fn next_char(&mut self) -> Option<char> {
+        let res = self.get_next_char();
+        // update position
+        match res {
+            Some(_) => self.pos += 1,
+            None => ()
+        }
+        res
+    }
+
     /// Returns `c` to the character stream, to be returned as the 
     /// next char. If `return_char` is called twice without an intervening
     /// `next_char`, the buffer will forget the previous returned character. 
     pub fn return_char(&mut self, c: char) {
+        self.pos -= 1;
         self.peek = Some(c)
     }
 
@@ -140,6 +178,26 @@ mod tests {
         assert_eq!(buffer.next_char(), Some('c'));
         buffer.skip_whitespace();
         assert_eq!(buffer.next_char(), None);
+    }
+
+    #[test]
+    fn position() {
+        let mut buffer = LookaheadBuffer::new("   abc   ");
+        assert_eq!(buffer.pos, 0);
+        buffer.skip_whitespace();
+        assert_eq!(buffer.pos, 3);
+        assert_eq!(buffer.next_char(), Some('a'));
+        assert_eq!(buffer.pos, 4);
+        assert_eq!(buffer.next_char(), Some('b'));
+        assert_eq!(buffer.pos, 5);
+        assert_eq!(buffer.next_char(), Some('c'));
+        assert_eq!(buffer.pos, 6);
+        buffer.return_char('c');
+        assert_eq!(buffer.pos, 5);
+        assert_eq!(buffer.next_char(), Some('c'));
+        assert_eq!(buffer.pos, 6);
+        buffer.skip_whitespace();
+        assert_eq!(buffer.pos, 9);
     }
 }
 
