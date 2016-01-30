@@ -7,9 +7,9 @@
 // Andrei de A. Formiga, 2013-10-02
 //
 
-extern mod std;
+extern crate std;
 
-use std::str::CharIterator;
+use std::str::Chars;
 
 /// A position in the input
 struct Pos {
@@ -44,7 +44,7 @@ type CharPos = uint;
 ///  and it almost always should advance the iterator)
 struct LookaheadBuffer<'r> {
     contents: &'r str,
-    iter: CharIterator<'r>,
+    iter: Chars<'r>,
     peek: Option<char>,
     pos: CharPos
 }

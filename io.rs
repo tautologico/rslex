@@ -7,7 +7,7 @@
 // Andrei de A. Formiga, 2013-11-19
 //
 
-extern mod std;
+extern crate std;
 
 use std::io::{SeekEnd, SeekSet};
 use std::io::Seek;

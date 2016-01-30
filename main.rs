@@ -67,12 +67,12 @@ fn build_desc_from_lines(lines: ~[~str]) -> ~LexerSpec {
 // }
 
 fn print_spec(spec: ~LexerSpec) {
-    println("%% Definitions:");
-    for def in spec.defs.iter() {  println(*def);  }
-    println("%% Rules:");
-    for rule in spec.rules.iter() {  println(*rule);  }
-    println("%% Code:");
-    for cd in spec.code.iter() {  println(*cd);  }
+    println!("%% Definitions:");
+    for def in spec.defs.iter() {  println!("{}", *def);  }
+    println!("%% Rules:");
+    for rule in spec.rules.iter() {  println!("{}", *rule);  }
+    println!("%% Code:");
+    for cd in spec.code.iter() {  println!("{}", *cd);  }
 }
 
 fn main() {

@@ -7,7 +7,7 @@
 // Andrei de A. Formiga, 2013-08-09
 //
 
-extern mod std;
+extern crate std;
 
 use buffer::LookaheadBuffer;
 
