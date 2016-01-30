@@ -1,0 +1,7 @@
+[package]
+name = "rslex"
+version = "0.1.0"
+authors = ["Andrei Formiga <archimedes_siracusa@hotmail.com>"]
+
+[dependencies]
+regex-syntax = "*"

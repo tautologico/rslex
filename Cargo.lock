@@ -1,0 +1,12 @@
+[root]
+name = "rslex"
+version = "0.1.0"
+dependencies = [
+ "regex-syntax 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
