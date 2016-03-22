@@ -7,19 +7,20 @@ type StateID = usize;
 
 struct State {
     id: StateID,
-    accept: bool,
     trans: Vec<Transition>
 }
 
 impl State {
-    pub fn find_transition(&self, label: Label) -> Option<&Transition> {
+    // finds the outgoing transitions for a given label
+    pub fn find_transition(&self, label: Label) -> Vec<&Transition> {
+        let mut res : Vec<&Transition> = Vec::new();
         for t in self.trans.iter() {
             if t.label == label {
-                return Some(&t);
+                res.push(&t);
             }
         }
 
-        None
+        res
     }
 }
 
@@ -44,10 +45,10 @@ impl NFASet {
         NFASet { states: st }
     }
 
-    pub fn create_state(&mut self, acc: bool) -> StateID {
+    pub fn create_state(&mut self) -> StateID {
         let id = self.states.len();
         let trs : Vec<Transition> = Vec::with_capacity(2);
-        let st = State { id: id, accept: acc, trans: trs };
+        let st = State { id: id, trans: trs };
         self.states.push(st);
         id
     }
@@ -80,37 +81,80 @@ impl NFASet {
         }
     }
 
-    pub fn create_nfa(&self, start: StateID) -> Option<NFA> {
-        if self.check_id(start) {
-            Some(NFA { start: start })
+    pub fn create_nfa(&self, start: StateID, acc: StateID) -> Option<NFA> {
+        if self.check_id(start) && self.check_id(acc) {
+            Some(NFA { start: start, accept: acc })
         }
         else {
             None
         }
     }
 
+    pub fn nfa_epsilon(&mut self) -> NFA {
+        let start = self.create_state();
+        let acc = self.create_state();
+
+        self.add_transition(start, acc, Label::Epsilon);
+
+        NFA { start: start, accept: acc }
+    }
+
+    pub fn nfa_symbol(&mut self, symbol: char) -> NFA {
+        let start = self.create_state();
+        let acc = self.create_state();
+
+        self.add_transition(start, acc, Label::Symbol(symbol));
+
+        NFA { start: start, accept: acc }
+    }
+
     pub fn nfa_union(&mut self, n1: NFA, n2: NFA) -> NFA {
-        NFA { start: 0 }  // TODO: implement
+        let start = self.create_state();
+        self.add_transition(start, n1.start, Label::Epsilon);
+        self.add_transition(start, n2.start, Label::Epsilon);
+
+        let acc = self.create_state();
+        self.add_transition(n1.accept, acc, Label::Epsilon);
+        self.add_transition(n2.accept, acc, Label::Epsilon);
+
+        NFA { start: start, accept: acc } 
     }
 
     pub fn nfa_concat(&mut self, n1: NFA, n2: NFA) -> NFA {
-        NFA { start: 0 }  // TODO: implement
+        self.add_transition(n1.accept, n2.start, Label::Epsilon);
+        NFA { start: n1.start, accept: n2.accept }
     }
 
     pub fn nfa_star(&mut self, n: NFA) -> NFA {
-        NFA { start: 0 }  // TODO: implement
+        let start = self.create_state();
+        let acc = self.create_state();
+
+        // transitions connecting old and new start/accept states
+        self.add_transition(start, n.start, Label::Epsilon);
+        self.add_transition(n.accept, acc, Label::Epsilon);
+
+        // transition connecting start and accept for 0 occurrences
+        self.add_transition(start, acc, Label::Epsilon);
+
+        // loop transition for any number of occurrences
+        self.add_transition(n.accept, n.start, Label::Epsilon);
+
+        NFA { start: start, accept: acc }
     }
 }
 
+// NFAs with a single accepting state, which is sufficient 
+// for automata generated from regular expressions
 struct NFA {
     start: StateID,
+    accept: StateID
 }
 
 #[test]
 fn states() {
     let mut ns = NFASet::new();
-    let id1 = ns.create_state(false);
-    let id2 = ns.create_state(false);
+    let id1 = ns.create_state();
+    let id2 = ns.create_state();
     assert_eq!(id1, 0);
     assert_eq!(id2, 1);
 
@@ -122,9 +166,9 @@ fn states() {
 #[test]
 fn add_transition() {
     let mut ns = NFASet::new();
-    let id1 = ns.create_state(false);
-    let id2 = ns.create_state(false);
-    let id3 = ns.create_state(false);
+    let id1 = ns.create_state();
+    let id2 = ns.create_state();
+    let id3 = ns.create_state();
     assert!(ns.add_transition(id1, id2, Label::Epsilon));
     assert!(ns.add_transition(id2, id3, Label::Symbol('a')));
 
@@ -136,18 +180,38 @@ fn add_transition() {
 #[test]
 fn transitions() {
     let mut ns = NFASet::new();
-    let id1 = ns.create_state(false);
-    let id2 = ns.create_state(false);
-    let id3 = ns.create_state(false);
+    let id1 = ns.create_state();
+    let id2 = ns.create_state();
+    let id3 = ns.create_state();
     assert!(ns.add_transition(id1, id2, Label::Epsilon));
+    assert!(ns.add_transition(id1, id3, Label::Epsilon));
     assert!(ns.add_transition(id2, id3, Label::Symbol('a')));
-    
+
+
     let st1 = ns.get_state(id1).unwrap();
-    let t1 = st1.find_transition(Label::Epsilon).unwrap();
+    let t0 = st1.find_transition(Label::Symbol('b'));
+    assert_eq!(t0.len(), 0);
+    let t1 = st1.find_transition(Label::Epsilon);
+    assert_eq!(t1.len(), 2);
 
-    let st2 = ns.get_state(t1.target).unwrap();
-    let t2 = st2.find_transition(Label::Symbol('a')).unwrap();
+    let st2 = ns.get_state(t1[0].target).unwrap();
+    let t2 = st2.find_transition(Label::Symbol('a'));
+    assert_eq!(t2.len(), 1);
 
-    assert_eq!(t2.target, id3);
+    assert_eq!(t2[0].target, id3);
+    assert_eq!(t1[1].target, id3);
 }
 
+#[test]
+fn epsilon() {
+    let mut ns = NFASet::new();
+    let n1 = ns.nfa_epsilon();
+
+    let st1 = ns.get_state(n1.start).unwrap();
+    let t1 = st1.find_transition(Label::Epsilon);
+    assert_eq!(t1.len(), 1);
+
+    let st2 = ns.get_state(t1[0].target).unwrap();
+    let t2 = st2.find_transition(Label::Epsilon);
+    assert_eq!(t2.len(), 0);
+}
