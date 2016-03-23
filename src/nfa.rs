@@ -83,7 +83,7 @@ impl NFASet {
 
     pub fn create_nfa(&self, start: StateID, acc: StateID) -> Option<NFA> {
         if self.check_id(start) && self.check_id(acc) {
-            Some(NFA { start: start, accept: acc })
+            Some(NFA { ns: self, start: start, accept: acc })
         }
         else {
             None
@@ -96,7 +96,7 @@ impl NFASet {
 
         self.add_transition(start, acc, Label::Epsilon);
 
-        NFA { start: start, accept: acc }
+        NFA { ns: self, start: start, accept: acc }
     }
 
     pub fn nfa_symbol(&mut self, symbol: char) -> NFA {
@@ -105,7 +105,7 @@ impl NFASet {
 
         self.add_transition(start, acc, Label::Symbol(symbol));
 
-        NFA { start: start, accept: acc }
+        NFA { ns: self, start: start, accept: acc }
     }
 
     pub fn nfa_union(&mut self, n1: NFA, n2: NFA) -> NFA {
@@ -117,12 +117,12 @@ impl NFASet {
         self.add_transition(n1.accept, acc, Label::Epsilon);
         self.add_transition(n2.accept, acc, Label::Epsilon);
 
-        NFA { start: start, accept: acc } 
+        NFA { ns: self, start: start, accept: acc } 
     }
 
     pub fn nfa_concat(&mut self, n1: NFA, n2: NFA) -> NFA {
         self.add_transition(n1.accept, n2.start, Label::Epsilon);
-        NFA { start: n1.start, accept: n2.accept }
+        NFA { ns: self, start: n1.start, accept: n2.accept }
     }
 
     pub fn nfa_star(&mut self, n: NFA) -> NFA {
@@ -139,15 +139,36 @@ impl NFASet {
         // loop transition for any number of occurrences
         self.add_transition(n.accept, n.start, Label::Epsilon);
 
-        NFA { start: start, accept: acc }
+        NFA { ns: self, start: start, accept: acc }
     }
 }
 
 // NFAs with a single accepting state, which is sufficient 
 // for automata generated from regular expressions
-struct NFA {
+struct NFA<'a> {
+    ns: &'a NFASet,    // FIX: forces mut borrowing when building NFAs
     start: StateID,
     accept: StateID
+}
+
+impl<'a> NFA<'a> {
+    fn epsilon_closure(&self, states: Vec<StateID>) -> Vec<StateID> {
+        let mut stack : Vec<StateID> = Vec::with_capacity(states.len());
+
+        stack.extend(states.clone());
+
+        while !stack.is_empty() {
+            let s = stack.pop().unwrap();
+            let st = self.ns.get_state(s).unwrap();
+            let ets = st.find_transition(Label::Epsilon);
+        }
+
+        states
+    }
+
+    pub fn simulate(&self, word: &str) -> bool {
+        false
+    }
 }
 
 #[test]
@@ -207,11 +228,11 @@ fn epsilon() {
     let mut ns = NFASet::new();
     let n1 = ns.nfa_epsilon();
 
-    let st1 = ns.get_state(n1.start).unwrap();
+    let st1 = n1.ns.get_state(n1.start).unwrap();  // FIX
     let t1 = st1.find_transition(Label::Epsilon);
     assert_eq!(t1.len(), 1);
 
-    let st2 = ns.get_state(t1[0].target).unwrap();
+    let st2 = n1.ns.get_state(t1[0].target).unwrap(); // FIX
     let t2 = st2.find_transition(Label::Epsilon);
     assert_eq!(t2.len(), 0);
 }
