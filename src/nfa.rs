@@ -102,16 +102,23 @@ impl NFA {
 
     fn epsilon_closure(&self, states: Vec<StateID>) -> Vec<StateID> {
         let mut stack : Vec<StateID> = Vec::with_capacity(states.len());
+        let mut clos : Vec<StateID> = Vec::with_capacity(states.len());
 
         stack.extend(states.clone());
+        clos.extend(states.clone());
 
         while !stack.is_empty() {
-            let s = stack.pop().unwrap();
-            let st = self.get_state(s).unwrap();
-            let ets = st.find_transition(Label::Epsilon);
+            let s = stack.pop().unwrap();         // safe to unwrap because stack is not empty
+            let st = self.get_state(s).unwrap();  // safe to unwrap because states on the stack must exist
+            for t in st.find_transition(Label::Epsilon).iter() {
+                if !clos.contains(&t.target) {
+                    clos.push(t.target);
+                    stack.push(t.target);
+                }
+            }
         }
 
-        states
+        clos
     }
 
     pub fn simulate(&self, word: &str) -> bool {
@@ -323,4 +330,20 @@ fn test_union() {
 
     let acc = nfa.get_state(s4.trans[0].target).unwrap();
     assert_eq!(acc.trans.len(), 0);
+}
+
+#[test]
+fn test_eps_clos() {
+    use nfa::Label::{Epsilon,Any};
+
+    let n1 = NFABuilder::build_from_spec(Spec::Single(Any));
+    let cls1 = n1.epsilon_closure(vec![n1.start]);
+    assert_eq!(cls1.len(), 1);
+    assert_eq!(cls1[0], n1.start);
+
+    let n2 = NFABuilder::build_from_spec(Spec::Single(Epsilon));
+    let cls2 = n2.epsilon_closure(vec![n2.start]);
+    assert_eq!(cls2.len(), 2);
+    assert_eq!(cls2[0], n1.start);
+    assert_eq!(cls2[1], n1.accept);
 }
