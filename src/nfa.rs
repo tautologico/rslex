@@ -3,6 +3,8 @@
 // Nondeterministic Finite Automata
 //
 
+use std::collections::HashSet;
+
 type StateID = usize;
 
 struct State {
@@ -22,9 +24,22 @@ impl State {
 
         res
     }
+
+    fn step(&self, c: char) -> HashSet<StateID> {
+        let mut res : HashSet<StateID> = HashSet::new();
+        for t in self.trans.iter() {
+            match t.label {
+                Label::Any => res.insert(t.target),
+                Label::Symbol(s) if s == c => res.insert(t.target),
+                _ => true
+            };
+        }
+
+        res
+    }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Hash)]
 enum Label {
     Epsilon,
     Any,
@@ -92,17 +107,25 @@ fn transitions() {
 struct NFA {
     start: StateID,
     accept: StateID,
-    states: Vec<State>
+    states: Vec<State>,
+    //tables: Vec<HashMap<Label, Vec<StateID>>>
 }
 
 impl NFA {
+    // pub fn new(st: Vec<State>, start: StateID, acc: StateID) -> NFA {
+    //     let mut tbls : Vec<HashMap<Label, Vec<StateID>>> = Vec::with_capacity(st.len());
+    //     for s in st.iter() {
+            
+    //     }
+    // }
+
     pub fn get_state(&self, sid: StateID) -> Option<&State> {
         self.states.get(sid)
     }
 
-    fn epsilon_closure(&self, states: Vec<StateID>) -> Vec<StateID> {
+    fn epsilon_closure(&self, states: HashSet<StateID>) -> HashSet<StateID> {
+        let mut clos : HashSet<StateID> = HashSet::new();
         let mut stack : Vec<StateID> = Vec::with_capacity(states.len());
-        let mut clos : Vec<StateID> = Vec::with_capacity(states.len());
 
         stack.extend(states.clone());
         clos.extend(states.clone());
@@ -112,7 +135,7 @@ impl NFA {
             let st = self.get_state(s).unwrap();  // safe to unwrap because states on the stack must exist
             for t in st.find_transition(Label::Epsilon).iter() {
                 if !clos.contains(&t.target) {
-                    clos.push(t.target);
+                    clos.insert(t.target);
                     stack.push(t.target);
                 }
             }
@@ -121,9 +144,36 @@ impl NFA {
         clos
     }
 
-    pub fn simulate(&self, word: &str) -> bool {
-        false
+    fn step(&self, s: StateID, c: char) -> HashSet<StateID> {
+        let st = self.get_state(s).unwrap();
+        st.step(c)
     }
+
+    fn steps(&self, vs: HashSet<StateID>, c: char) -> HashSet<StateID> {
+        let mut res : HashSet<StateID> = HashSet::new();
+        for s in vs.iter() {
+            let ss = self.step(*s, c);
+            res = res.union(&ss).cloned().collect();
+        }
+
+        res
+    }
+
+    // this is terribly inefficient for the moment, will
+    // optimize if/when necessary
+    pub fn simulate(&self, word: &str) -> bool {
+        let mut s = self.epsilon_closure(state_set(self.start));
+        for c in word.chars() {
+            s = self.epsilon_closure(self.steps(s, c));
+        }
+        s.contains(&self.accept)
+    }
+}
+
+fn state_set(s: StateID) -> HashSet<StateID> {
+    let mut hs : HashSet<StateID> = HashSet::new();
+    hs.insert(s);
+    hs
 }
 
 // specification for a NFA built by translation from a regexp
@@ -337,13 +387,35 @@ fn test_eps_clos() {
     use nfa::Label::{Epsilon,Any};
 
     let n1 = NFABuilder::build_from_spec(Spec::Single(Any));
-    let cls1 = n1.epsilon_closure(vec![n1.start]);
+    let cls1 = n1.epsilon_closure(state_set(n1.start));
     assert_eq!(cls1.len(), 1);
-    assert_eq!(cls1[0], n1.start);
+    assert!(cls1.contains(&n1.start));
 
     let n2 = NFABuilder::build_from_spec(Spec::Single(Epsilon));
-    let cls2 = n2.epsilon_closure(vec![n2.start]);
+    let cls2 = n2.epsilon_closure(state_set(n2.start));
     assert_eq!(cls2.len(), 2);
-    assert_eq!(cls2[0], n1.start);
-    assert_eq!(cls2[1], n1.accept);
+    assert!(cls2.contains(&n2.start));
+    assert!(cls2.contains(&n2.accept));
+}
+
+#[test]
+fn test_simulation() {
+    use nfa::Label::*;
+
+    let sp1 = Spec::single(Symbol('a'));
+
+    let n1 = NFABuilder::build_from_spec(*sp1);
+    assert!(n1.simulate("a"));
+    assert!(!n1.simulate("x"));
+    assert!(!n1.simulate("aaa"));
+
+    let sym_a = Spec::single(Symbol('a'));
+    let sym_b = Spec::single(Symbol('b'));
+    let sp2 = Spec::star(Spec::union(sym_a, sym_b));
+    let n2 = NFABuilder::build_from_spec(*sp2);
+    assert!(n2.simulate("aabb"));
+    assert!(n2.simulate("bbaa"));
+    assert!(n2.simulate(""));
+    assert!(n2.simulate("aaaaaaaba"));
+    assert!(!n2.simulate("aaaaaaabbbbcaaa"));
 }
