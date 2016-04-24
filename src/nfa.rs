@@ -9,6 +9,7 @@ type StateID = usize;
 
 struct State {
     id: StateID,
+    accept: bool,
     trans: Vec<Transition>
 }
 
@@ -106,7 +107,7 @@ fn transitions() {
 
 struct NFA {
     start: StateID,
-    accept: StateID,
+    //accept: StateID,
     states: Vec<State>,
     //tables: Vec<HashMap<Label, Vec<StateID>>>
 }
@@ -115,7 +116,7 @@ impl NFA {
     // pub fn new(st: Vec<State>, start: StateID, acc: StateID) -> NFA {
     //     let mut tbls : Vec<HashMap<Label, Vec<StateID>>> = Vec::with_capacity(st.len());
     //     for s in st.iter() {
-            
+
     //     }
     // }
 
@@ -166,7 +167,8 @@ impl NFA {
         for c in word.chars() {
             s = self.epsilon_closure(self.steps(s, c));
         }
-        s.contains(&self.accept)
+        s.iter().any(|&i| self.get_state(i).unwrap().accept)
+        //s.contains(&self.accept)
     }
 }
 
@@ -223,8 +225,9 @@ impl NFABuilder {
         let mut builder = NFABuilder { states: st };
 
         let nid = builder.build(s);
+        builder.set_accepting(nid.accept);
 
-        NFA { states: builder.states, start: nid.start, accept: nid.accept } 
+        NFA { states: builder.states, start: nid.start }
     }
 
     fn build(&mut self, s: Spec) -> NFAid {
@@ -246,16 +249,26 @@ impl NFABuilder {
             }
         }
     }
-    
+
+    fn fuse_nfas(&mut self, ns: Vec<NFAid>) -> NFAid {
+        let nstart = self.new_state();
+        for n in ns {
+            self.add_transition(nstart, n.start, Label::Epsilon);
+            self.set_accepting(n.accept);
+        }
+
+        NFAid { start: nstart, accept: 0 }  // TODO: states must have accept flag
+    }
+
     fn new_state(&mut self) -> StateID {
         let res = self.states.len();
         let trs : Vec<Transition> = Vec::with_capacity(2);
-        let st = State { id: res, trans: trs };
+        let st = State { id: res, trans: trs, accept: false };
 
         self.states.push(st);
         res
     }
-    
+
     pub fn check_id(&self, id: StateID) -> bool {
         id < self.states.len()
     }
@@ -267,10 +280,15 @@ impl NFABuilder {
             res
         }
     }
-    
+
     // TODO: check for deletion
     fn get_state(&self, id: StateID) -> Option<&State> {
         self.states.get(id)
+    }
+
+    fn set_accepting(&mut self, id: StateID) {
+        let st = self.get_state_mut(id);
+        st.accept = true;
     }
 
     fn add_transition(&mut self, src_id: StateID, dst_id: StateID, label: Label) -> bool {
@@ -303,7 +321,7 @@ impl NFABuilder {
         self.add_transition(n1.accept, acc, Label::Epsilon);
         self.add_transition(n2.accept, acc, Label::Epsilon);
 
-        NFAid { start: start, accept: acc }         
+        NFAid { start: start, accept: acc }
     }
 
     fn concat(&mut self, n1: NFAid, n2: NFAid) -> NFAid {
@@ -340,7 +358,7 @@ fn test_single() {
 
     let ts = s0.find_transition(Label::Epsilon);
     assert_eq!(ts.len(), 1);
-    assert_eq!(ts[0].target, n1.accept);
+    assert!(n1.get_state(ts[0].target).unwrap().accept);
 
     let s1 = n1.get_state(ts[0].target).unwrap();
     assert_eq!(s1.trans.len(), 0);
@@ -362,12 +380,12 @@ fn test_union() {
 
     let t0 = s0.find_transition(Epsilon);
     assert_eq!(t0.len(), 2);
-    
+
     let s1 = nfa.get_state(t0[0].target).unwrap();
     assert_eq!(s1.trans.len(), 1);
     let s2 = nfa.get_state(t0[1].target).unwrap();
     assert_eq!(s2.trans.len(), 1);
-    
+
     let s3 = nfa.get_state(s1.trans[0].target).unwrap();
     assert_eq!(s3.trans.len(), 1);
     assert_eq!(s3.trans[0].label, Epsilon);
@@ -376,7 +394,7 @@ fn test_union() {
     assert_eq!(s4.trans[0].label, Epsilon);
 
     assert_eq!(s3.trans[0].target, s4.trans[0].target);
-    assert_eq!(s3.trans[0].target, nfa.accept);
+    assert!(nfa.get_state(s3.trans[0].target).unwrap().accept);
 
     let acc = nfa.get_state(s4.trans[0].target).unwrap();
     assert_eq!(acc.trans.len(), 0);
@@ -395,7 +413,7 @@ fn test_eps_clos() {
     let cls2 = n2.epsilon_closure(state_set(n2.start));
     assert_eq!(cls2.len(), 2);
     assert!(cls2.contains(&n2.start));
-    assert!(cls2.contains(&n2.accept));
+    //assert!(cls2.contains(&n2.accept));
 }
 
 #[test]
