@@ -8,7 +8,7 @@ use std::collections::HashSet;
 type StateID = usize;
 
 struct State {
-    id: StateID,
+    //id: StateID,
     accept: bool,
     trans: Vec<Transition>
 }
@@ -230,6 +230,15 @@ impl NFABuilder {
         NFA { states: builder.states, start: nid.start }
     }
 
+    // build NFA integrating all the specs; consumes (drains) the vector ss
+    pub fn build_from_specs(ss: &mut Vec<Spec>) -> NFA {
+        let mut builder = NFABuilder::new();
+        let ns = ss.drain(..).map(|s| builder.build(s)).collect();
+        let start = builder.fuse_nfas(ns);
+
+        NFA { states: builder.states, start: start }
+    }
+
     fn build(&mut self, s: Spec) -> NFAid {
         match s {
             Spec::Single(l) => self.single(l),
@@ -250,20 +259,22 @@ impl NFABuilder {
         }
     }
 
-    fn fuse_nfas(&mut self, ns: Vec<NFAid>) -> NFAid {
+    // fuse all nfas creating a new start state; return ID of new start state
+    fn fuse_nfas(&mut self, ns: Vec<NFAid>) -> StateID {
         let nstart = self.new_state();
         for n in ns {
             self.add_transition(nstart, n.start, Label::Epsilon);
             self.set_accepting(n.accept);
         }
 
-        NFAid { start: nstart, accept: 0 }  // TODO: states must have accept flag
+        nstart
     }
 
     fn new_state(&mut self) -> StateID {
         let res = self.states.len();
         let trs : Vec<Transition> = Vec::with_capacity(2);
-        let st = State { id: res, trans: trs, accept: false };
+        //let st = State { id: res, trans: trs, accept: false };
+        let st = State { trans: trs, accept: false };
 
         self.states.push(st);
         res
@@ -436,4 +447,22 @@ fn test_simulation() {
     assert!(n2.simulate(""));
     assert!(n2.simulate("aaaaaaaba"));
     assert!(!n2.simulate("aaaaaaabbbbcaaa"));
+}
+
+#[test]
+fn test_build_specs() {
+    use nfa::Label::*;
+
+    let sp1 = Spec::single(Symbol('a'));
+    let sp2 = Spec::concat(Spec::single(Symbol('b')), Spec::single(Symbol('a')));
+
+    let mut v : Vec<Spec> = Vec::with_capacity(2);
+    v.push(*sp1);
+    v.push(*sp2);
+
+    let n = NFABuilder::build_from_specs(&mut v);
+
+    assert!(n.simulate("ba"));
+    assert!(n.simulate("a"));
+    assert!(!n.simulate("baa"));
 }
