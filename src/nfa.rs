@@ -5,9 +5,9 @@
 
 use std::collections::HashSet;
 
-type StateID = usize;
+pub type StateID = usize;
 
-struct State {
+pub struct State {
     //id: StateID,
     accept: bool,
     trans: Vec<Transition>
@@ -15,7 +15,7 @@ struct State {
 
 impl State {
     // finds the outgoing transitions for a given label
-    pub fn find_transition(&self, label: Label) -> Vec<&Transition> {
+    fn find_transition(&self, label: Label) -> Vec<&Transition> {
         let mut res : Vec<&Transition> = Vec::new();
         for t in self.trans.iter() {
             if t.label == label {
@@ -41,7 +41,7 @@ impl State {
 }
 
 #[derive(PartialEq, Eq, Debug, Hash)]
-enum Label {
+pub enum Label {
     Epsilon,
     Any,
     Symbol(char)
@@ -105,7 +105,7 @@ fn transitions() {
     assert_eq!(t1[1].target, id3);
 }
 
-struct NFA {
+pub struct NFA {
     start: StateID,
     //accept: StateID,
     states: Vec<State>,
@@ -179,7 +179,7 @@ fn state_set(s: StateID) -> HashSet<StateID> {
 }
 
 // specification for a NFA built by translation from a regexp
-enum Spec {
+pub enum Spec {
     Single(Label),
     Union(Box<Spec>, Box<Spec>),
     Concat(Box<Spec>, Box<Spec>),
@@ -188,19 +188,19 @@ enum Spec {
 
 impl Spec {
     // helper methods for building specs
-    fn single(l: Label) -> Box<Spec> {
+    pub fn single(l: Label) -> Box<Spec> {
         Box::new(Spec::Single(l))
     }
 
-    fn union(s1: Box<Spec>, s2: Box<Spec>) -> Box<Spec> {
+    pub fn union(s1: Box<Spec>, s2: Box<Spec>) -> Box<Spec> {
         Box::new(Spec::Union(s1, s2))
     }
 
-    fn concat(s1: Box<Spec>, s2: Box<Spec>) -> Box<Spec> {
+    pub fn concat(s1: Box<Spec>, s2: Box<Spec>) -> Box<Spec> {
         Box::new(Spec::Concat(s1, s2))
     }
 
-    fn star(s: Box<Spec>) -> Box<Spec> {
+    pub fn star(s: Box<Spec>) -> Box<Spec> {
         Box::new(Spec::Star(s))
     }
 }
@@ -210,7 +210,7 @@ struct NFAid {
     accept: StateID
 }
 
-struct NFABuilder {
+pub struct NFABuilder {
     states: Vec<State>
 }
 
@@ -280,7 +280,7 @@ impl NFABuilder {
         res
     }
 
-    pub fn check_id(&self, id: StateID) -> bool {
+    fn check_id(&self, id: StateID) -> bool {
         id < self.states.len()
     }
 
