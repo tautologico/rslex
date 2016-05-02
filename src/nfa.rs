@@ -40,7 +40,7 @@ impl State {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Label {
     Epsilon,
     Any,
@@ -179,6 +179,7 @@ fn state_set(s: StateID) -> HashSet<StateID> {
 }
 
 // specification for a NFA built by translation from a regexp
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Spec {
     Single(Label),
     Union(Box<Spec>, Box<Spec>),
