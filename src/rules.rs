@@ -1,4 +1,3 @@
-
 use regex_syntax::Expr;
 use regex_syntax::Repeater;
 
@@ -26,6 +25,7 @@ fn repeater_to_spec(re: &Expr, r: &Repeater) -> Spec {
 fn regex_to_nfa_spec(re: &Expr) -> Spec {
     match *re {
         Expr::AnyChar => Spec::Single(Label::Any),
+        Expr::AnyCharNoNL => Spec::Single(Label::Any),  // FIX: don't match newline
         Expr::Repeat { ref e, r, greedy } => repeater_to_spec(&*e, &r),
         _ => unimplemented!()
     }
