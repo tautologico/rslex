@@ -11,37 +11,32 @@ struct Rule {
     action: String,
 }
 
-/****
-Return: Spec
-Parameters: &Vec<char>
-Desc: It converts a Vec<char> into a concatenation of simples transitions.
-More precisely, into a concatenation of Specs.
-****/
-pub fn literal_to_spec(chars: &Vec<char>) -> Spec{
-    //take the first
+/// Converts a sequence of characters into a concatenation of simple
+/// transitions.
+///
+/// The return value is a Spec containing the concatenation of all
+/// single transition automata generated for each character in `chars`.
+pub fn literal_to_spec(chars: &Vec<char>) -> Spec {
+    // take the first
     let mut tmp: Box<Spec> = Spec::single(Label::Symbol((*chars)[0]));
 
-    //iterate for the others
+    // iterate for the others
     for i in chars.iter().skip(1) {
         let aux = Spec::single(Label::Symbol(*i));
         tmp = Spec::concat(tmp,aux);
     }
 
-    //return the concatenation
+    // return the concatenation
     *tmp
 }
 
 
 
-/****
-Return: Spec
-Parameters: &Expr
-            &Repeater
-Desc: It converts a Expr(re) to a Spec(s1)
-if the repeater(r) is ZeroOrOne it unions the Spec(s1)
-with Episilon, if r is ZeroOrMore it starts s1,
-if r is OneOrMore it concatenates s1.clone with s1 star
-****/
+/// Converts `re` and repeater specification `r` into a NFA `Spec`.
+///
+/// The repetition behavior is translated to the basic constructs
+/// of a NFA `Spec`: union, concatenation and Kleene star of NFAs,
+/// using the NFA built for `re` as one of the operands.
 fn repeater_to_spec(re: &Expr, r: &Repeater) -> Spec {
     let s1 = Box::new(regex_to_nfa_spec(re));
 
@@ -53,11 +48,11 @@ fn repeater_to_spec(re: &Expr, r: &Repeater) -> Spec {
     }
 }
 
-/****
-Return: Spec
-Parameters: &Expr
-Desc: It tests the Expr (re) returning a Spec.
-****/
+/// Converts the regexp `re` into a NFA `Spec`.
+///
+/// The function traverses the `re` syntax tree recursively, building
+/// NFA Specs for each component and combining them according to the
+/// operations in the ER.
 fn regex_to_nfa_spec(re: &Expr) -> Spec {
     match *re {
         Expr::AnyChar => Spec::Single(Label::Any),
