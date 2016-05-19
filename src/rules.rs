@@ -16,7 +16,7 @@ struct Rule {
 ///
 /// The return value is a Spec containing the concatenation of all
 /// single transition automata generated for each character in `chars`.
-pub fn literal_to_spec(chars: &Vec<char>) -> Spec {
+fn literal_to_spec(chars: &Vec<char>) -> Spec {
     // take the first
     let mut tmp: Box<Spec> = Spec::single(Label::Symbol((*chars)[0]));
 
@@ -53,7 +53,7 @@ fn repeater_to_spec(re: &Expr, r: &Repeater) -> Spec {
 /// The function traverses the `re` syntax tree recursively, building
 /// NFA Specs for each component and combining them according to the
 /// operations in the ER.
-fn regex_to_nfa_spec(re: &Expr) -> Spec {
+pub fn regex_to_nfa_spec(re: &Expr) -> Spec {
     match *re {
         Expr::AnyChar => Spec::Single(Label::Any),
         Expr::AnyCharNoNL => Spec::Single(Label::Any),  // FIX: don't match newline
