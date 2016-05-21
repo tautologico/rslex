@@ -30,6 +30,35 @@ fn literal_to_spec(chars: &Vec<char>) -> Spec {
     *tmp
 }
 
+/// Converts a vector of Expr into a concatenation of Specs.
+///
+/// The return value is a Spec containing the concatenation of all
+/// Expr in the parameter vector.
+fn concat_to_spec(exprs: &Vec<Expr>) -> Spec {
+    let mut tmp: Box<Spec> = Box::new(regex_to_nfa_spec(&(exprs[0])));
+
+    for i in exprs.iter().skip(1) {
+        let aux : Box<Spec> = Box::new(regex_to_nfa_spec(&i));
+        tmp  = Spec::concat(tmp,aux);
+    }
+
+    *tmp
+}
+
+/// Converts a vector of Expr into a union of Specs.
+///
+/// The return value is a Spec containing the union of all
+/// Expr in the parameter vector.
+fn alternate_to_spec(exprs: &Vec<Expr>) -> Spec {
+    let mut tmp: Box<Spec> = Box::new(regex_to_nfa_spec(&(exprs[0])));;
+
+    for i in exprs.iter().skip(1) {
+        let aux : Box<Spec> = Box::new(regex_to_nfa_spec(&i));
+        tmp  = Spec::union(tmp,aux);
+    }
+
+    *tmp
+}
 
 
 /// Converts `re` and repeater specification `r` into a NFA `Spec`.
@@ -59,6 +88,8 @@ pub fn regex_to_nfa_spec(re: &Expr) -> Spec {
         Expr::AnyCharNoNL => Spec::Single(Label::Any),  // FIX: don't match newline
         Expr::Repeat { ref e, r, greedy } => repeater_to_spec(&*e, &r),
         Expr::Literal{ ref chars, casei} => literal_to_spec(chars),
+        Expr::Concat(ref exprs) => concat_to_spec(&exprs),
+        Expr::Alternate(ref exprs) => alternate_to_spec(&exprs),
         _ => unimplemented!()
     }
 }
@@ -81,3 +112,44 @@ fn test_literal() {
     println!("regex: {:?}", re);
     assert_eq!(spec, *Spec::concat(Spec::single(Label::Symbol('a')), Spec::single(Label::Symbol('b'))));
 }
+
+#[test]
+fn test_concat(){
+    let re1 = Expr::parse(r"ab").unwrap();
+    let re2 = Expr::parse(r"cd").unwrap();
+    
+    
+    let mut tmp: Vec<Expr> = Vec::with_capacity(2);
+    
+    tmp.push(re1);
+    tmp.push(re2);
+
+    let aux = concat_to_spec(&tmp);
+
+    let aux2 = NFABuilder::build_from_spec(aux);
+
+    assert!(aux2.simulate("abcd"));
+    assert!(!aux2.simulate("ab"));
+    assert!(!aux2.simulate("cd"));
+
+}
+
+#[test]
+fn test_altenate(){
+    let re1 = Expr::parse(r"ab").unwrap();
+    let re2 = Expr::parse(r"cd").unwrap();
+    
+    
+    let mut tmp: Vec<Expr> = Vec::with_capacity(2);
+    
+    tmp.push(re1);
+    tmp.push(re2);
+    let aux = alternate_to_spec(&tmp);
+
+    let aux2 = NFABuilder::build_from_spec(aux);
+
+    assert!(!aux2.simulate("abcd"));
+    assert!(aux2.simulate("ab"));
+    assert!(aux2.simulate("cd"));
+}
+
