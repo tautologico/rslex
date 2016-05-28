@@ -30,10 +30,10 @@ fn literal_to_spec(chars: &Vec<char>) -> Spec {
     *tmp
 }
 
-/// Converts a vector of Expr into a concatenation of Specs.
+/// Converts a concatenation of `Expr` into a concatenation of `Spec`s.
 ///
-/// The return value is a Spec containing the concatenation of all
-/// Expr in the parameter vector.
+/// The return value is a `Spec` containing the concatenation of all
+/// REs in `exprs`.
 fn concat_to_spec(exprs: &Vec<Expr>) -> Spec {
     let mut tmp: Box<Spec> = Box::new(regex_to_nfa_spec(&(exprs[0])));
 
@@ -45,10 +45,10 @@ fn concat_to_spec(exprs: &Vec<Expr>) -> Spec {
     *tmp
 }
 
-/// Converts a vector of Expr into a union of Specs.
+/// Converts a union of `Expr` into a union of `Spec`s.
 ///
-/// The return value is a Spec containing the union of all
-/// Expr in the parameter vector.
+/// The return value is a `Spec` containing the union of all
+/// REs in `exprs`.
 fn alternate_to_spec(exprs: &Vec<Expr>) -> Spec {
     let mut tmp: Box<Spec> = Box::new(regex_to_nfa_spec(&(exprs[0])));;
 
@@ -72,7 +72,7 @@ fn repeater_range(s1: Box<Spec>, min: u32, max: Option<u32>) -> Spec {
         begin = 1;
     }
 
-    for i in begin..min {
+    for _ in begin..min {
         aux = Spec::concat(aux, s1.clone());
     }
 
@@ -82,7 +82,7 @@ fn repeater_range(s1: Box<Spec>, min: u32, max: Option<u32>) -> Spec {
         spec = aux.clone();
 
         //iterate min + 1 ... max
-        for i in min..max.unwrap() {
+        for _ in min..max.unwrap() {
             aux = Spec::concat(aux, s1.clone());
             spec = Spec::union(spec, aux.clone());
         }
@@ -116,7 +116,7 @@ pub fn regex_to_nfa_spec(re: &Expr) -> Spec {
         Expr::AnyChar => Spec::Single(Label::Any),
         Expr::AnyCharNoNL => Spec::Single(Label::Any),  // FIX: don't match newline
         Expr::Repeat { ref e, r, greedy } => repeater_to_spec(&*e, &r),
-        Expr::Literal{ ref chars, casei} => literal_to_spec(chars),
+        Expr::Literal{ ref chars, casei } => literal_to_spec(chars),
         Expr::Concat(ref exprs) => concat_to_spec(&exprs),
         Expr::Alternate(ref exprs) => alternate_to_spec(&exprs),
         _ => unimplemented!()
