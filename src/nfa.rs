@@ -3,6 +3,8 @@
 // Nondeterministic Finite Automata
 //
 
+use std::fs::File;
+use std::io::Write;
 use std::collections::HashSet;
 
 pub type StateID = usize;
@@ -45,6 +47,18 @@ pub enum Label {
     Epsilon,
     Any,
     Symbol(char)
+}
+
+impl Label {
+    fn to_string(&self) -> String {
+        let mut res = String::new();
+        match *self {
+            Label::Any => res.push('*'),
+            Label::Epsilon => res.push_str("&epsilon;"),
+            Label::Symbol(c) => res.push(c)
+        }
+        res
+    }
 }
 
 struct Transition {
@@ -169,6 +183,26 @@ impl NFA {
         }
         s.iter().any(|&i| self.get_state(i).unwrap().accept)
         //s.contains(&self.accept)
+    }
+
+    pub fn dot_output(&self, filename: &str) {
+        let mut buffer = File::create(filename).unwrap();
+
+        buffer.write(b"digraph {\n").unwrap();
+        buffer.write(b"  node [shape=circle]\n").unwrap();
+        // loop over state ids
+        for sid in 0 .. self.states.len() {
+            for trans in &self.states[sid].trans {
+                if self.get_state(trans.target).unwrap().accept {
+                    buffer.write(format!("  {} [shape=doublecircle]\n", trans.target).as_bytes()).unwrap();
+                }
+                buffer.write(format!("  {} -> {} [label = \"{}\"]\n", sid,
+                                     trans.target, trans.label.to_string()).as_bytes()).unwrap();
+            }
+        }
+        buffer.write(b"  p [shape=point, style=invis]\n").unwrap();
+        buffer.write(format!("  p -> {}\n", self.start).as_bytes()).unwrap();
+        buffer.write(b"}\n").unwrap();
     }
 }
 
@@ -384,6 +418,7 @@ fn test_union() {
 
     let spec = Spec::union(Spec::single(Epsilon), Spec::single(Any));
     let nfa = NFABuilder::build_from_spec(*spec);
+    nfa.dot_output("union1.dot");
 
     let s0 = nfa.get_state(nfa.start).unwrap();
     assert_eq!(s0.trans.len(), 2);
