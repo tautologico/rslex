@@ -3,6 +3,7 @@
 // Nondeterministic Finite Automata
 //
 
+use std::fmt;
 use std::fs::File;
 use std::io::Write;
 use std::collections::HashSet;
@@ -58,6 +59,12 @@ impl Label {
             Label::Symbol(c) => res.push(c)
         }
         res
+    }
+}
+
+impl fmt::Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }
 
@@ -189,6 +196,7 @@ impl NFA {
         let mut buffer = File::create(filename).unwrap();
 
         buffer.write(b"digraph {\n").unwrap();
+        buffer.write(b"  graph [rankdir=LR]\n").unwrap();
         buffer.write(b"  node [shape=circle]\n").unwrap();
         // loop over state ids
         for sid in 0 .. self.states.len() {
@@ -197,7 +205,7 @@ impl NFA {
                     buffer.write(format!("  {} [shape=doublecircle]\n", trans.target).as_bytes()).unwrap();
                 }
                 buffer.write(format!("  {} -> {} [label = \"{}\"]\n", sid,
-                                     trans.target, trans.label.to_string()).as_bytes()).unwrap();
+                                     trans.target, trans.label).as_bytes()).unwrap();
             }
         }
         buffer.write(b"  p [shape=point, style=invis]\n").unwrap();
