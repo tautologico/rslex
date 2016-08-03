@@ -7,6 +7,8 @@ use std::fmt;
 use std::fs::File;
 use std::io::Write;
 use std::collections::HashSet;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 
 pub type StateID = usize;
 
@@ -134,13 +136,6 @@ pub struct NFA {
 }
 
 impl NFA {
-    // pub fn new(st: Vec<State>, start: StateID, acc: StateID) -> NFA {
-    //     let mut tbls : Vec<HashMap<Label, Vec<StateID>>> = Vec::with_capacity(st.len());
-    //     for s in st.iter() {
-
-    //     }
-    // }
-
     pub fn get_state(&self, sid: StateID) -> Option<&State> {
         self.states.get(sid)
     }
@@ -192,6 +187,30 @@ impl NFA {
         //s.contains(&self.accept)
     }
 
+    pub fn to_dfa(&self) -> Self {
+        let mut builder = NFABuilder::new();
+        let start = builder.new_state();
+        let mut queue = VecDeque::new();
+        let mut marked = Vec::new();
+        let mut state_map = HashMap::new();
+
+        let mut startset = HashSet::new();
+        startset.insert(self.start);
+        state_map.insert(start, self.epsilon_closure(startset));
+
+        queue.push_back(start);
+
+        while let Some(state) = queue.pop_front() {
+            marked.push(state);
+            let set = state_map.get(&state).unwrap();  // state must be in map by now
+            // for each transition from set
+            // check if resulting set is already in map; if not, create new state and put in map
+            // add transition 
+        }
+
+        NFA { states: builder.states, start: start }
+    }
+    
     pub fn dot_output(&self, filename: &str) {
         let mut buffer = File::create(filename).unwrap();
 
