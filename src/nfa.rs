@@ -187,6 +187,17 @@ impl NFA {
         //s.contains(&self.accept)
     }
 
+    fn transitions_from_set(&self, set: &HashSet<StateID>) -> HashSet<&Label> {
+        let mut labels = HashSet::new();
+        for sid in set.iter() {
+            let state = self.get_state(*sid).unwrap();
+            for trans in state.trans.iter() {
+                labels.insert(&trans.label);
+            }
+        }
+        labels
+    }
+
     pub fn to_dfa(&self) -> Self {
         let mut builder = NFABuilder::new();
         let start = builder.new_state();
@@ -203,8 +214,16 @@ impl NFA {
         while let Some(state) = queue.pop_front() {
             marked.push(state);
             let set = state_map.get(&state).unwrap();  // state must be in map by now
-            // for each transition from set
-            // check if resulting set is already in map; if not, create new state and put in map
+            for label in self.transitions_from_set(set) {
+                // for each transition from set
+                // check if resulting set is already in map; if not, create new state and put in map
+                match *label {
+                    Label::Epsilon => (),
+                    Label::Symbol(c) => {
+                    },
+                    Label::Any => ()  // TODO 
+                }
+            }            
             // add transition 
         }
 
