@@ -203,7 +203,7 @@ impl NFA {
         let start = builder.new_state();
         let mut queue = VecDeque::new();
         let mut marked = Vec::new();
-        let mut state_map = HashMap::new();
+        let mut state_map = HashMap::new();   // invert map (set -> state), use queue of sets
 
         let mut startset = HashSet::new();
         startset.insert(self.start);
@@ -220,11 +220,18 @@ impl NFA {
                 match *label {
                     Label::Epsilon => (),
                     Label::Symbol(c) => {
+                        let new_set = self.epsilon_closure(self.steps(set));
+                        let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
+                            let new_state = builder.new_state();
+                            state_map.insert(new_state, new_set);
+                            new_state
+                        } else { state_map.get(new_state).unwrap() }
+                        
+                        builder.add_transition(state, new_state, Label::Symbol(c));
                     },
                     Label::Any => ()  // TODO 
                 }
-            }            
-            // add transition 
+            }
         }
 
         NFA { states: builder.states, start: start }
