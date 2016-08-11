@@ -9,6 +9,7 @@ use std::io::Write;
 use std::collections::HashSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::BTreeSet;
 
 pub type StateID = usize;
 
@@ -225,18 +226,56 @@ impl NFA {
                             let new_state = builder.new_state();
                             state_map.insert(new_state, new_set);
                             new_state
-                        } else { state_map.get(new_state).unwrap() }
-                        
+                        } else { state_map.get(new_state).unwrap() };
+
                         builder.add_transition(state, new_state, Label::Symbol(c));
                     },
-                    Label::Any => ()  // TODO 
+                    Label::Any => ()  // TODO
                 }
             }
         }
 
         NFA { states: builder.states, start: start }
     }
-    
+
+    pub fn to_dfa2(&self) -> Self {
+        let mut builder = NFABuilder::new();
+        let start = builder.new_state();
+        let mut queue = VecDeque::new();
+        let mut marked = Vec::new();
+        let mut state_map = HashMap::new();   // invert map (set -> state), use queue of sets
+
+        let mut startset = self.epsilon_closure(HashSet::new().insert(self.start));
+        state_map.insert(self.epsilon_closure(startset), start);
+
+        queue.push_back(start);
+
+        while let Some(state) = queue.pop_front() {
+            marked.push(state);
+            let set = state_map.get(&state).unwrap();  // state must be in map by now
+            for label in self.transitions_from_set(set) {
+                // for each transition from set
+                // check if resulting set is already in map; if not, create new state and put in map
+                match *label {
+                    Label::Epsilon => (),
+                    Label::Symbol(c) => {
+                        let new_set = self.epsilon_closure(self.steps(set));
+                        let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
+                            let new_state = builder.new_state();
+                            state_map.insert(new_state, new_set);
+                            new_state
+                        } else { state_map.get(new_state).unwrap() };
+
+                        builder.add_transition(state, new_state, Label::Symbol(c));
+                    },
+                    Label::Any => ()  // TODO
+                }
+            }
+        }
+
+        NFA { states: builder.states, start: start }
+    }
+
     pub fn dot_output(&self, filename: &str) {
         let mut buffer = File::create(filename).unwrap();
 
@@ -256,6 +295,18 @@ impl NFA {
         buffer.write(b"  p [shape=point, style=invis]\n").unwrap();
         buffer.write(format!("  p -> {}\n", self.start).as_bytes()).unwrap();
         buffer.write(b"}\n").unwrap();
+    }
+}
+
+struct OrderedStateMap(BTreeSet<StateID>);
+
+impl OrderedStateMap {
+    pub fn insert(&mut self, s: StateID) {
+        self.0.insert(s);
+    }
+
+    pub fn contains(&self, s: StateID) -> bool {
+        self.0.contains(&s)
     }
 }
 
