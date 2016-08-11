@@ -128,34 +128,6 @@ fn transitions() {
     assert_eq!(t1[1].target, id3);
 }
 
-// ordered set with canonical string representation
-struct OrderedStateSet(BTreeSet<StateID>);
-
-impl OrderedStateSet {
-    pub fn new() -> Self {
-        let bset : BTreeSet<StateID> = BTreeSet::new();
-        OrderedStateSet(bset)
-    }
-    
-    pub fn insert(&mut self, s: StateID) {
-        self.0.insert(s);
-    }
-
-    pub fn contains(&self, s: StateID) -> bool {
-        self.0.contains(&s)
-    }
-
-    pub fn canonical_string(&self) -> String {
-        let mut res = String::new();
-
-        for id in self.0.iter() {
-            res.push_str(&format!("{} ", id));
-        }
-
-        res
-    }
-}
-
 fn canonical_set_string(bset: &BTreeSet<StateID>) -> String {
     let mut res = String::new();
 
@@ -237,32 +209,52 @@ impl NFA {
         labels
     }
 
+    // fn set_state(set: &BTreeSet<StateID>, builder: &mut NFABuilder, map: &mut HashMap<String, StateID>) -> StateID {
+    //     match map.contains(canonical_set_string(set)) {
+    //         None => {
+    //             let state = builder.new_state();
+    //             map.insert(set, state);
+    //             state
+    //         },
+    //         Some(state) => state
+    //     }
+    // }
+    
     pub fn to_dfa(&self) -> Self {
         let mut builder = NFABuilder::new();
-        let start = builder.new_state();
         let mut queue = VecDeque::new();
         //let mut marked = Vec::new();
         let mut state_map = HashMap::new(); 
 
-        let mut startset = state_set(start);
-        state_map.insert(canonical_set_string(&self.epsilon_closure(&startset)), start);
+        let startset = self.epsilon_closure(&state_set(self.start));
+        let start = builder.new_state();
+        state_map.insert(canonical_set_string(&startset), start);
         queue.push_back(startset);
 
         while let Some(set) = queue.pop_front() {
-            let state = state_map.get(&canonical_set_string(&set)).unwrap(); 
-            for label in self.transitions_from_set(set) {
+            //println!("set in queue: {}", canonical_set_string(&set));
+            let state = *(state_map.get(&canonical_set_string(&set)).unwrap());
+            for label in self.transitions_from_set(&set) {
                 // for each transition from set
                 // check if resulting set is already in map; if not, create new state and put in map
                 match *label {
-                    Label::Epsilon => (),
+                    Label::Epsilon => (),    // do nothing for epsilon transitions, will be picked up in epsilon_closure
                     Label::Symbol(c) => {
-                        let new_set = self.epsilon_closure(&self.steps(&set));
+                        let new_set = self.epsilon_closure(&self.steps(&set, c));
                         
-                        let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
-                            let new_state = builder.new_state();
-                            state_map.insert(new_state, new_set);
-                            new_state
-                        } else { state_map.get(new_state).unwrap() };
+                        let new_state_opt = state_map.get(&canonical_set_string(&new_set)).map(|state| *state);
+                        let new_state = match new_state_opt {
+                            None => {
+                                let state = builder.new_state();
+                                if new_set.iter().any(|&i| self.get_state(i).unwrap().accept) {
+                                    builder.set_accepting(state);
+                                }
+                                state_map.insert(canonical_set_string(&new_set), state);
+                                queue.push_back(new_set);
+                                state
+                            },
+                            Some(state) => state
+                        };
 
                         builder.add_transition(state, new_state, Label::Symbol(c));
                     },
@@ -273,44 +265,6 @@ impl NFA {
 
         NFA { states: builder.states, start: start }
     }
-
-    // pub fn to_dfa2(&self) -> Self {
-    //     let mut builder = NFABuilder::new();
-    //     let start = builder.new_state();
-    //     let mut queue = VecDeque::new();
-    //     let mut marked = Vec::new();
-    //     let mut state_map = HashMap::new();   // invert map (set -> state), use queue of sets
-
-    //     let mut startset = self.epsilon_closure(BTreeSet::new().insert(self.start));
-    //     state_map.insert(self.epsilon_closure(startset), start);
-
-    //     queue.push_back(start);
-
-    //     while let Some(state) = queue.pop_front() {
-    //         marked.push(state);
-    //         let set = state_map.get(&state).unwrap();  // state must be in map by now
-    //         for label in self.transitions_from_set(set) {
-    //             // for each transition from set
-    //             // check if resulting set is already in map; if not, create new state and put in map
-    //             match *label {
-    //                 Label::Epsilon => (),
-    //                 Label::Symbol(c) => {
-    //                     let new_set = self.epsilon_closure(self.steps(set));
-    //                     let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
-    //                         let new_state = builder.new_state();
-    //                         state_map.insert(new_state, new_set);
-    //                         new_state
-    //                     } else { state_map.get(new_state).unwrap() };
-
-    //                     builder.add_transition(state, new_state, Label::Symbol(c));
-    //                 },
-    //                 Label::Any => ()  // TODO
-    //             }
-    //         }
-    //     }
-
-    //     NFA { states: builder.states, start: start }
-    // }
 
     pub fn dot_output(&self, filename: &str) {
         let mut buffer = File::create(filename).unwrap();
@@ -332,18 +286,6 @@ impl NFA {
         buffer.write(format!("  p -> {}\n", self.start).as_bytes()).unwrap();
         buffer.write(b"}\n").unwrap();
     }
-}
-
-#[test]
-fn ordered_set() {
-    let mut oss = OrderedStateSet::new();
-
-    oss.insert(15);
-    oss.insert(12);
-    oss.insert(8);
-
-    assert!(oss.contains(12));
-    assert_eq!(oss.canonical_string(), "8 12 15 ");
 }
 
 #[test]
@@ -597,6 +539,18 @@ fn test_union() {
 
     let acc = nfa.get_state(s4.trans[0].target).unwrap();
     assert_eq!(acc.trans.len(), 0);
+}
+
+#[test]
+fn to_dfa() {
+    use nfa::Label::{Epsilon, Any};
+
+    let spec = Spec::union(Spec::single(Label::Symbol('a')), Spec::single(Label::Symbol('b')));
+    let nfa = NFABuilder::build_from_spec(*spec);
+    nfa.dot_output("todfa_nfa.dot");
+
+    let dfa = nfa.to_dfa();
+    dfa.dot_output("todfa_dfa.dot");
 }
 
 #[test]
