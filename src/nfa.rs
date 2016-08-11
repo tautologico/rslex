@@ -6,7 +6,6 @@
 use std::fmt;
 use std::fs::File;
 use std::io::Write;
-use std::collections::HashSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::collections::BTreeSet;
@@ -32,8 +31,8 @@ impl State {
         res
     }
 
-    fn step(&self, c: char) -> HashSet<StateID> {
-        let mut res : HashSet<StateID> = HashSet::new();
+    fn step(&self, c: char) -> BTreeSet<StateID> {
+        let mut res : BTreeSet<StateID> = BTreeSet::new();
         for t in self.trans.iter() {
             match t.label {
                 Label::Any => res.insert(t.target),
@@ -46,7 +45,7 @@ impl State {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub enum Label {
     Epsilon,
     Any,
@@ -129,6 +128,17 @@ fn transitions() {
     assert_eq!(t1[1].target, id3);
 }
 
+fn canonical_set_string(bset: &BTreeSet<StateID>) -> String {
+    let mut res = String::new();
+
+    for id in bset.iter() {
+        res.push_str(&format!("{} ", id));
+    }
+
+    res
+}
+
+
 pub struct NFA {
     start: StateID,
     //accept: StateID,
@@ -141,8 +151,8 @@ impl NFA {
         self.states.get(sid)
     }
 
-    fn epsilon_closure(&self, states: HashSet<StateID>) -> HashSet<StateID> {
-        let mut clos : HashSet<StateID> = HashSet::new();
+    fn epsilon_closure(&self, states: &BTreeSet<StateID>) -> BTreeSet<StateID> {
+        let mut clos : BTreeSet<StateID> = BTreeSet::new();
         let mut stack : Vec<StateID> = Vec::with_capacity(states.len());
 
         stack.extend(states.clone());
@@ -162,13 +172,13 @@ impl NFA {
         clos
     }
 
-    fn step(&self, s: StateID, c: char) -> HashSet<StateID> {
+    fn step(&self, s: StateID, c: char) -> BTreeSet<StateID> {
         let st = self.get_state(s).unwrap();
         st.step(c)
     }
 
-    fn steps(&self, vs: HashSet<StateID>, c: char) -> HashSet<StateID> {
-        let mut res : HashSet<StateID> = HashSet::new();
+    fn steps(&self, vs: &BTreeSet<StateID>, c: char) -> BTreeSet<StateID> {
+        let mut res : BTreeSet<StateID> = BTreeSet::new();
         for s in vs.iter() {
             let ss = self.step(*s, c);
             res = res.union(&ss).cloned().collect();
@@ -180,16 +190,16 @@ impl NFA {
     // this is terribly inefficient for the moment, will
     // optimize if/when necessary
     pub fn simulate(&self, word: &str) -> bool {
-        let mut s = self.epsilon_closure(state_set(self.start));
+        let mut s = self.epsilon_closure(&state_set(self.start));
         for c in word.chars() {
-            s = self.epsilon_closure(self.steps(s, c));
+            s = self.epsilon_closure(&self.steps(&s, c));
         }
         s.iter().any(|&i| self.get_state(i).unwrap().accept)
         //s.contains(&self.accept)
     }
 
-    fn transitions_from_set(&self, set: &HashSet<StateID>) -> HashSet<&Label> {
-        let mut labels = HashSet::new();
+    fn transitions_from_set(&self, set: &BTreeSet<StateID>) -> BTreeSet<&Label> {
+        let mut labels = BTreeSet::new();
         for sid in set.iter() {
             let state = self.get_state(*sid).unwrap();
             for trans in state.trans.iter() {
@@ -199,72 +209,52 @@ impl NFA {
         labels
     }
 
+    // fn set_state(set: &BTreeSet<StateID>, builder: &mut NFABuilder, map: &mut HashMap<String, StateID>) -> StateID {
+    //     match map.contains(canonical_set_string(set)) {
+    //         None => {
+    //             let state = builder.new_state();
+    //             map.insert(set, state);
+    //             state
+    //         },
+    //         Some(state) => state
+    //     }
+    // }
+    
     pub fn to_dfa(&self) -> Self {
         let mut builder = NFABuilder::new();
-        let start = builder.new_state();
         let mut queue = VecDeque::new();
-        let mut marked = Vec::new();
-        let mut state_map = HashMap::new();   // invert map (set -> state), use queue of sets
+        //let mut marked = Vec::new();
+        let mut state_map = HashMap::new(); 
 
-        let mut startset = HashSet::new();
-        startset.insert(self.start);
-        state_map.insert(start, self.epsilon_closure(startset));
+        let startset = self.epsilon_closure(&state_set(self.start));
+        let start = builder.new_state();
+        state_map.insert(canonical_set_string(&startset), start);
+        queue.push_back(startset);
 
-        queue.push_back(start);
-
-        while let Some(state) = queue.pop_front() {
-            marked.push(state);
-            let set = state_map.get(&state).unwrap();  // state must be in map by now
-            for label in self.transitions_from_set(set) {
+        while let Some(set) = queue.pop_front() {
+            //println!("set in queue: {}", canonical_set_string(&set));
+            let state = *(state_map.get(&canonical_set_string(&set)).unwrap());
+            for label in self.transitions_from_set(&set) {
                 // for each transition from set
                 // check if resulting set is already in map; if not, create new state and put in map
                 match *label {
-                    Label::Epsilon => (),
+                    Label::Epsilon => (),    // do nothing for epsilon transitions, will be picked up in epsilon_closure
                     Label::Symbol(c) => {
-                        let new_set = self.epsilon_closure(self.steps(set));
-                        let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
-                            let new_state = builder.new_state();
-                            state_map.insert(new_state, new_set);
-                            new_state
-                        } else { state_map.get(new_state).unwrap() };
-
-                        builder.add_transition(state, new_state, Label::Symbol(c));
-                    },
-                    Label::Any => ()  // TODO
-                }
-            }
-        }
-
-        NFA { states: builder.states, start: start }
-    }
-
-    pub fn to_dfa2(&self) -> Self {
-        let mut builder = NFABuilder::new();
-        let start = builder.new_state();
-        let mut queue = VecDeque::new();
-        let mut marked = Vec::new();
-        let mut state_map = HashMap::new();   // invert map (set -> state), use queue of sets
-
-        let mut startset = self.epsilon_closure(HashSet::new().insert(self.start));
-        state_map.insert(self.epsilon_closure(startset), start);
-
-        queue.push_back(start);
-
-        while let Some(state) = queue.pop_front() {
-            marked.push(state);
-            let set = state_map.get(&state).unwrap();  // state must be in map by now
-            for label in self.transitions_from_set(set) {
-                // for each transition from set
-                // check if resulting set is already in map; if not, create new state and put in map
-                match *label {
-                    Label::Epsilon => (),
-                    Label::Symbol(c) => {
-                        let new_set = self.epsilon_closure(self.steps(set));
-                        let new_state = if !state_map.contains(new_set) {  // key is the state, not set!!!
-                            let new_state = builder.new_state();
-                            state_map.insert(new_state, new_set);
-                            new_state
-                        } else { state_map.get(new_state).unwrap() };
+                        let new_set = self.epsilon_closure(&self.steps(&set, c));
+                        
+                        let new_state_opt = state_map.get(&canonical_set_string(&new_set)).map(|state| *state);
+                        let new_state = match new_state_opt {
+                            None => {
+                                let state = builder.new_state();
+                                if new_set.iter().any(|&i| self.get_state(i).unwrap().accept) {
+                                    builder.set_accepting(state);
+                                }
+                                state_map.insert(canonical_set_string(&new_set), state);
+                                queue.push_back(new_set);
+                                state
+                            },
+                            Some(state) => state
+                        };
 
                         builder.add_transition(state, new_state, Label::Symbol(c));
                     },
@@ -298,20 +288,20 @@ impl NFA {
     }
 }
 
-struct OrderedStateMap(BTreeSet<StateID>);
+#[test]
+fn canonical_string() {
+    let mut set : BTreeSet<StateID> = BTreeSet::new();
 
-impl OrderedStateMap {
-    pub fn insert(&mut self, s: StateID) {
-        self.0.insert(s);
-    }
+    set.insert(15);
+    set.insert(12);
+    set.insert(8);
 
-    pub fn contains(&self, s: StateID) -> bool {
-        self.0.contains(&s)
-    }
+    assert!(set.contains(&12));
+    assert_eq!(canonical_set_string(&set), "8 12 15 ");
 }
 
-fn state_set(s: StateID) -> HashSet<StateID> {
-    let mut hs : HashSet<StateID> = HashSet::new();
+fn state_set(s: StateID) -> BTreeSet<StateID> {
+    let mut hs : BTreeSet<StateID> = BTreeSet::new();
     hs.insert(s);
     hs
 }
@@ -552,16 +542,28 @@ fn test_union() {
 }
 
 #[test]
+fn to_dfa() {
+    use nfa::Label::{Epsilon, Any};
+
+    let spec = Spec::union(Spec::single(Label::Symbol('a')), Spec::single(Label::Symbol('b')));
+    let nfa = NFABuilder::build_from_spec(*spec);
+    nfa.dot_output("todfa_nfa.dot");
+
+    let dfa = nfa.to_dfa();
+    dfa.dot_output("todfa_dfa.dot");
+}
+
+#[test]
 fn test_eps_clos() {
     use nfa::Label::{Epsilon,Any};
 
     let n1 = NFABuilder::build_from_spec(Spec::Single(Any));
-    let cls1 = n1.epsilon_closure(state_set(n1.start));
+    let cls1 = n1.epsilon_closure(&state_set(n1.start));
     assert_eq!(cls1.len(), 1);
     assert!(cls1.contains(&n1.start));
 
     let n2 = NFABuilder::build_from_spec(Spec::Single(Epsilon));
-    let cls2 = n2.epsilon_closure(state_set(n2.start));
+    let cls2 = n2.epsilon_closure(&state_set(n2.start));
     assert_eq!(cls2.len(), 2);
     assert!(cls2.contains(&n2.start));
     //assert!(cls2.contains(&n2.accept));
