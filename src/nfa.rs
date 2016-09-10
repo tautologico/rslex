@@ -219,12 +219,12 @@ impl NFA {
     //         Some(state) => state
     //     }
     // }
-    
+
     pub fn to_dfa(&self) -> Self {
         let mut builder = NFABuilder::new();
         let mut queue = VecDeque::new();
         //let mut marked = Vec::new();
-        let mut state_map = HashMap::new(); 
+        let mut state_map = HashMap::new();
 
         let startset = self.epsilon_closure(&state_set(self.start));
         let start = builder.new_state();
@@ -241,7 +241,6 @@ impl NFA {
                     Label::Epsilon => (),    // do nothing for epsilon transitions, will be picked up in epsilon_closure
                     Label::Symbol(c) => {
                         let new_set = self.epsilon_closure(&self.steps(&set, c));
-                        
                         let new_state_opt = state_map.get(&canonical_set_string(&new_set)).map(|state| *state);
                         let new_state = match new_state_opt {
                             None => {
@@ -551,6 +550,56 @@ fn to_dfa() {
 
     let dfa = nfa.to_dfa();
     dfa.dot_output("todfa_dfa.dot");
+}
+
+/*
+Testing if a nfa and a dfa are equivalent
+from card: https://trello.com/c/q4DyS8jj
+*/
+#[test]
+fn test_nfa_dfa() {
+    use regex_syntax::Expr;
+    use rules;
+
+    //test 1
+    let re1 = Expr::parse(r"a{4,}").unwrap();
+    let spc1 = rules::regex_to_nfa_spec(&re1);
+    let nfa1 = NFABuilder::build_from_spec(spc1);
+    let dfa1 = nfa1.to_dfa();
+    assert!(nfa1.simulate("aaaaa"));
+    assert!(dfa1.simulate("aaaaa"));
+    assert!(!nfa1.simulate("aa"));
+    assert!(!dfa1.simulate("aa"));
+
+    //test 2
+    let re2 = Expr::parse(r"ab|cd").unwrap();
+    let spc2 = rules::regex_to_nfa_spec(&re2);
+    let nfa2 = NFABuilder::build_from_spec(spc2);
+    let dfa2 = nfa2.to_dfa();
+    assert!(nfa2.simulate("ab"));
+    assert!(dfa2.simulate("ab"));
+    assert!(nfa2.simulate("cd"));
+    assert!(dfa2.simulate("cd"));
+    assert!(!nfa2.simulate("abcd"));
+    assert!(!dfa2.simulate("abcd"));
+
+    //test 3
+    let re3 = Expr::parse(r"ab*").unwrap();
+    let spc3 = rules::regex_to_nfa_spec(&re3);
+    println!("regex!!");
+    println!("{:?}", spc3);
+    let nfa3 = NFABuilder::build_from_spec(spc3);
+    let dfa3 = nfa3.to_dfa();
+    nfa3.dot_output("test3_nfa.dot");
+    dfa3.dot_output("test3_dfa.dot");
+
+    assert!(nfa3.simulate("abbbbb"));
+    assert!(dfa3.simulate("abbbbb"));
+    assert!(nfa3.simulate("a"));
+    assert!(dfa3.simulate("a"));
+    assert!(!nfa3.simulate("abbabbbb"));
+    assert!(!dfa3.simulate("abbabbbb"));
+
 }
 
 #[test]
