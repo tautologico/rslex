@@ -554,6 +554,43 @@ fn to_dfa() {
 }
 
 #[test]
+fn test_to_dfa() {
+    use nfa::Label::*;
+    use regex_syntax::Expr;
+    use rules;
+
+    let sp1 = Spec::union(Spec::single(Label::Symbol('a')), Spec::single(Label::Symbol('b')));
+    let dfa1 = NFABuilder::build_from_spec(*sp1).to_dfa();
+    assert!(dfa1.simulate("a"));
+    assert!(dfa1.simulate("b"));
+    assert!(!dfa1.simulate("abbbba"));
+    assert!(!dfa1.simulate("ba"));
+   
+    let sp2 = Spec::star(Spec::union(Spec::single(Label::Symbol('a')), Spec::single(Label::Symbol('c'))));
+    let dfa2 = NFABuilder::build_from_spec(*sp2).to_dfa();
+    assert!(dfa2.simulate("aaaaaaaca"));
+    assert!(dfa2.simulate("acaccc"));
+    assert!(dfa2.simulate("c"));
+    assert!(!dfa2.simulate("aaaaaaacaabd"));
+   
+    let sp3 = Spec::concat(Spec::star(Spec::single(Label::Symbol('c'))), Spec::star(Spec::single(Label::Symbol('d'))));
+    let dfa3 = NFABuilder::build_from_spec(*sp3).to_dfa();
+    assert!(dfa3.simulate("ccdd"));
+    assert!(dfa3.simulate("cccdddd"));
+    assert!(dfa3.simulate("c"));
+    assert!(!dfa3.simulate("dddcc"));
+   
+    let re = Expr::parse(r"b{3,7}").unwrap();
+    let sp4 = rules::regex_to_nfa_spec(&re);
+    let dfa4 = NFABuilder::build_from_spec(sp4).to_dfa();
+    assert!(dfa4.simulate("bbb"));
+    assert!(!dfa4.simulate("bbbbbbbbbbbbbb"));
+    assert!(!dfa4.simulate("x"));
+    assert!(dfa4.simulate("bbbbbb"));    
+}
+
+
+#[test]
 fn test_eps_clos() {
     use nfa::Label::{Epsilon,Any};
 
